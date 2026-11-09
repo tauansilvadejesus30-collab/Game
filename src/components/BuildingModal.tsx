@@ -36,27 +36,27 @@ export const BuildingModal: React.FC<BuildingModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-3">
-      <div className="bg-[#171926] border-2 border-[#4b4e6d] rounded-2xl w-full max-w-xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-2 sm:p-4">
+      <div className="bg-[#171926] border-2 border-[#4b4e6d] rounded-2xl w-full max-w-2xl h-[92vh] max-h-[460px] flex flex-col shadow-2xl overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3.5 bg-[#12141f] border-b border-[#2b2e42]">
+        <div className="flex items-center justify-between px-4 py-2 sm:py-2.5 bg-[#12141f] border-b border-[#2b2e42] shrink-0">
           <div className="flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-emerald-400" />
-            <h2 className="font-pixel text-sm md:text-base text-emerald-400">CONSTRUÇÃO DE BASE</h2>
+            <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400" />
+            <h2 className="font-pixel text-xs sm:text-sm text-emerald-400">CONSTRUÇÃO DE BASE</h2>
           </div>
           <button
             onClick={() => {
               soundEngine.playUiClick();
               onClose();
             }}
-            className="w-8 h-8 rounded-lg bg-[#25283b] hover:bg-rose-900/60 text-gray-300 hover:text-white flex items-center justify-center cursor-pointer transition-colors"
+            className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#25283b] hover:bg-rose-900/60 text-gray-300 hover:text-white flex items-center justify-center cursor-pointer transition-colors"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="p-4 md:p-6 overflow-y-auto flex flex-col gap-3">
+        <div className="p-3 sm:p-4 overflow-y-auto flex flex-col gap-2 flex-1 min-h-0">
           <p className="text-xs text-gray-300">
             Selecione uma estrutura para posicionar no mapa. No mapa, clique para construir ou use o botão direito para cancelar.
           </p>

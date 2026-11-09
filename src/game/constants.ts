@@ -525,7 +525,7 @@ export const RECIPES: Recipe[] = [
     outputQuantity: 3,
     ingredients: [
       { itemId: 'branch', quantity: 2 },
-      { itemId: 'coal', quantity: 1 },
+      { itemId: 'fiber', quantity: 2 },
     ],
     category: 'survival',
   },

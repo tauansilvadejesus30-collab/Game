@@ -30,34 +30,34 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-3">
-      <div className="bg-[#171926] border-2 border-[#4b4e6d] rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+      <div className="bg-[#171926] border-2 border-[#4b4e6d] rounded-2xl w-full max-w-4xl h-[92vh] max-h-[460px] flex flex-col shadow-2xl overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3.5 bg-[#12141f] border-b border-[#2b2e42]">
+        <div className="flex items-center justify-between px-4 py-2 sm:py-2.5 bg-[#12141f] border-b border-[#2b2e42] shrink-0">
           <div className="flex items-center gap-2">
             <span className="text-xl">🎒</span>
-            <h2 className="font-pixel text-sm md:text-base text-amber-400">INVENTÁRIO & EQUIPAMENTO</h2>
+            <h2 className="font-pixel text-xs sm:text-sm text-amber-400">INVENTÁRIO & EQUIPAMENTO</h2>
           </div>
           <button
             onClick={() => {
               soundEngine.playUiClick();
               onClose();
             }}
-            className="w-8 h-8 rounded-lg bg-[#25283b] hover:bg-rose-900/60 text-gray-300 hover:text-white flex items-center justify-center cursor-pointer transition-colors"
+            className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#25283b] hover:bg-rose-900/60 text-gray-300 hover:text-white flex items-center justify-center cursor-pointer transition-colors"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Body */}
-        <div className="p-4 md:p-6 grid grid-cols-1 md:grid-cols-3 gap-5 overflow-y-auto">
+        <div className="p-3 sm:p-4 grid grid-cols-1 sm:grid-cols-3 gap-3 overflow-y-auto flex-1 min-h-0">
           {/* Column 1 & 2: 24 Slots Grid */}
-          <div className="md:col-span-2 flex flex-col gap-3">
+          <div className="sm:col-span-2 flex flex-col gap-2 min-h-0 overflow-y-auto">
             <div className="flex items-center justify-between text-xs text-gray-400 font-bold px-1">
               <span>MOCHILA ({inventory.filter(Boolean).length}/24)</span>
-              <span className="text-[11px] text-yellow-400/80 font-pixel">1-8 Barra Rápida</span>
+              <span className="text-[10px] text-yellow-400/80 font-pixel">1-8 Barra Rápida</span>
             </div>
 
-            <div className="grid grid-cols-6 gap-2 bg-[#10121a] p-3 rounded-xl border border-[#26283b]">
+            <div className="grid grid-cols-6 gap-1.5 sm:gap-2 bg-[#10121a] p-2.5 rounded-xl border border-[#26283b]">
               {inventory.map((slot, idx) => {
                 const isSelected = selectedSlotIndex === idx;
                 const isHotbar = idx < 8;
