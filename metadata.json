@@ -1,0 +1,6 @@
+{
+  "name": "Lost World — Sobrevivência 2D",
+  "description": "Jogo de sobrevivência 2D em pixel art com mundo aberto, coleta de recursos, construção de base, combate com monstros, ciclo dia/noite e agricultura.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
