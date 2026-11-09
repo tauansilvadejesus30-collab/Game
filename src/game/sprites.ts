@@ -2,50 +2,88 @@ import { Direction } from './types';
 import { TILE_SIZE, TILE_TYPES } from './constants';
 
 export class SpriteRenderer {
-  // We can cache offscreen patterns for tiles
-  private grassCanvas: HTMLCanvasElement;
+  // We cache offscreen patterns for tiles
+  private grassVariants: HTMLCanvasElement[];
   private waterCanvas: HTMLCanvasElement;
   private sandCanvas: HTMLCanvasElement;
   private dirtCanvas: HTMLCanvasElement;
   private ruinsCanvas: HTMLCanvasElement;
 
   constructor() {
-    this.grassCanvas = this.createGrassTile();
+    this.grassVariants = this.createGrassTileVariants();
     this.waterCanvas = this.createWaterTile();
     this.sandCanvas = this.createSandTile();
     this.dirtCanvas = this.createDirtTile();
     this.ruinsCanvas = this.createRuinsTile();
   }
 
-  // --- Tile Generators ---
-  private createGrassTile(): HTMLCanvasElement {
-    const c = document.createElement('canvas');
-    c.width = TILE_SIZE;
-    c.height = TILE_SIZE;
-    const ctx = c.getContext('2d')!;
-    ctx.fillStyle = '#4b8e2b';
-    ctx.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
+  // --- Tile Generators (Rich 16-Bit Pixel Art) ---
+  private createGrassTileVariants(): HTMLCanvasElement[] {
+    const variants: HTMLCanvasElement[] = [];
 
-    // Pixel details
-    ctx.fillStyle = '#3c7a20';
-    ctx.fillRect(4, 6, 4, 6);
-    ctx.fillRect(20, 16, 4, 8);
-    ctx.fillRect(36, 8, 4, 6);
-    ctx.fillRect(12, 32, 4, 6);
-    ctx.fillRect(28, 36, 4, 8);
+    for (let v = 0; v < 4; v++) {
+      const c = document.createElement('canvas');
+      c.width = TILE_SIZE;
+      c.height = TILE_SIZE;
+      const ctx = c.getContext('2d')!;
 
-    ctx.fillStyle = '#5ca835';
-    ctx.fillRect(8, 20, 3, 5);
-    ctx.fillRect(24, 6, 3, 5);
-    ctx.fillRect(40, 32, 3, 5);
+      // Rich layered meadow base
+      ctx.fillStyle = v === 2 ? '#3b7822' : '#428526';
+      ctx.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
 
-    // Little flowers
-    ctx.fillStyle = '#ffdf4a';
-    ctx.fillRect(16, 12, 3, 3);
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(32, 28, 3, 3);
+      // Deep shadow grass blades
+      ctx.fillStyle = '#2c5c1a';
+      ctx.fillRect(2, 6, 3, 5);
+      ctx.fillRect(18, 14, 3, 6);
+      ctx.fillRect(34, 8, 3, 5);
+      ctx.fillRect(10, 30, 3, 6);
+      ctx.fillRect(26, 34, 3, 5);
+      ctx.fillRect(42, 22, 3, 5);
 
-    return c;
+      // Mid vibrant grass tufts
+      ctx.fillStyle = '#55a630';
+      ctx.fillRect(3, 5, 2, 4);
+      ctx.fillRect(19, 13, 2, 5);
+      ctx.fillRect(35, 7, 2, 4);
+      ctx.fillRect(11, 29, 2, 5);
+      ctx.fillRect(27, 33, 2, 4);
+
+      // Highlights
+      ctx.fillStyle = '#70c73a';
+      ctx.fillRect(7, 22, 2, 3);
+      ctx.fillRect(23, 8, 2, 3);
+      ctx.fillRect(39, 38, 2, 3);
+
+      if (v === 0) {
+        // Variant 0: Tiny clovers
+        ctx.fillStyle = '#5fb334';
+        ctx.fillRect(12, 16, 2, 2);
+        ctx.fillRect(14, 15, 2, 2);
+        ctx.fillRect(13, 18, 2, 2);
+      } else if (v === 1) {
+        // Variant 1: White Daisy with yellow center
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(14, 18, 5, 5);
+        ctx.fillStyle = '#facc15';
+        ctx.fillRect(15, 19, 3, 3);
+      } else if (v === 2) {
+        // Variant 2: Yellow wild buttercup
+        ctx.fillStyle = '#fbbf24';
+        ctx.fillRect(30, 24, 4, 4);
+        ctx.fillStyle = '#d97706';
+        ctx.fillRect(31, 25, 2, 2);
+      } else if (v === 3) {
+        // Variant 3: Little earth pebble and grass cluster
+        ctx.fillStyle = '#524538';
+        ctx.fillRect(22, 26, 3, 2);
+        ctx.fillStyle = '#786959';
+        ctx.fillRect(23, 26, 2, 1);
+      }
+
+      variants.push(c);
+    }
+
+    return variants;
   }
 
   private createWaterTile(): HTMLCanvasElement {
@@ -134,9 +172,11 @@ export class SpriteRenderer {
   // --- Draw Tile Function ---
   public drawTile(ctx: CanvasRenderingContext2D, type: number, x: number, y: number, timeMs: number) {
     switch (type) {
-      case TILE_TYPES.GRASS:
-        ctx.drawImage(this.grassCanvas, x, y);
+      case TILE_TYPES.GRASS: {
+        const tileIdx = Math.abs(Math.floor(x / TILE_SIZE) * 31 + Math.floor(y / TILE_SIZE) * 17) % this.grassVariants.length;
+        ctx.drawImage(this.grassVariants[tileIdx], x, y);
         break;
+      }
       case TILE_TYPES.WATER:
       case TILE_TYPES.DEEP_WATER:
         ctx.drawImage(this.waterCanvas, x, y);
@@ -178,8 +218,10 @@ export class SpriteRenderer {
         ctx.fillRect(x + 4, y + 8, 12, 10);
         ctx.fillRect(x + 24, y + 26, 14, 10);
         break;
-      default:
-        ctx.drawImage(this.grassCanvas, x, y);
+      default: {
+        const tileIdx = Math.abs(Math.floor(x / TILE_SIZE) * 31 + Math.floor(y / TILE_SIZE) * 17) % this.grassVariants.length;
+        ctx.drawImage(this.grassVariants[tileIdx], x, y);
+      }
     }
   }
 
@@ -362,64 +404,121 @@ export class SpriteRenderer {
     }
 
     if (type === 'tree') {
-      // Big Oak Tree
-      // Ground shadow
+      // Lush 16-Bit Pixel Art Oak Tree (Matching Stardew/Reference style)
+      // Ground drop shadow
+      ctx.fillStyle = 'rgba(0,0,0,0.32)';
+      ctx.beginPath();
+      ctx.ellipse(0, 18, 24, 9, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Textured Wooden Trunk with roots
+      ctx.fillStyle = '#452912'; // Deep bark shadow
+      ctx.fillRect(-7, -4, 14, 22);
+      ctx.fillStyle = '#613b1a'; // Mid bark
+      ctx.fillRect(-5, -4, 10, 21);
+      ctx.fillStyle = '#7a4e25'; // Bark highlight
+      ctx.fillRect(-2, -4, 4, 18);
+      // Root flares
+      ctx.fillStyle = '#452912';
+      ctx.fillRect(-9, 14, 3, 4);
+      ctx.fillRect(6, 14, 3, 4);
+
+      // Gentle wind sway
+      const sway = Math.sin(timeMs * 0.002 + x * 0.05) * 2;
+
+      // Layer 1: Dark deep undergrowth foliage (canopy shadow)
+      ctx.fillStyle = '#1c4714';
+      ctx.beginPath();
+      ctx.arc(-10 + sway, -26, 18, 0, Math.PI * 2);
+      ctx.arc(10 + sway, -24, 18, 0, Math.PI * 2);
+      ctx.arc(sway, -34, 24, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Layer 2: Main vibrant green leaf clumps
+      ctx.fillStyle = '#2d7320';
+      ctx.beginPath();
+      ctx.arc(-12 + sway, -30, 16, 0, Math.PI * 2);
+      ctx.arc(12 + sway, -28, 16, 0, Math.PI * 2);
+      ctx.arc(-2 + sway, -38, 20, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Layer 3: Sun-facing leaf highlights (top-left lit)
+      ctx.fillStyle = '#459932';
+      ctx.beginPath();
+      ctx.arc(-14 + sway, -34, 12, 0, Math.PI * 2);
+      ctx.arc(4 + sway, -42, 14, 0, Math.PI * 2);
+      ctx.arc(-4 + sway, -44, 12, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Layer 4: Bright sun-kissed top tips
+      ctx.fillStyle = '#68c251';
+      ctx.fillRect(-8 + sway, -52, 10, 5);
+      ctx.fillRect(-16 + sway, -42, 6, 4);
+      ctx.fillRect(8 + sway, -38, 6, 4);
+
+    } else if (type === 'pine_tree') {
+      // 16-Bit Evergreen Spruce / Pine
       ctx.fillStyle = 'rgba(0,0,0,0.3)';
       ctx.beginPath();
-      ctx.ellipse(0, 18, 22, 8, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, 17, 18, 7, 0, 0, Math.PI * 2);
       ctx.fill();
 
       // Trunk
-      ctx.fillStyle = '#59381c';
-      ctx.fillRect(-6, -4, 12, 22);
-      ctx.fillStyle = '#3b230e';
-      ctx.fillRect(-6, -4, 4, 22);
+      ctx.fillStyle = '#3d2511';
+      ctx.fillRect(-4, 0, 8, 17);
 
-      // Swaying canopy
-      const sway = Math.sin(timeMs * 0.002 + x * 0.05) * 2;
-      ctx.fillStyle = '#2d6a1d';
+      const sway = Math.sin(timeMs * 0.002 + x * 0.05) * 1.5;
+
+      // Bottom Tier
+      ctx.fillStyle = '#143818'; // Dark underside
       ctx.beginPath();
-      ctx.arc(sway, -28, 26, 0, Math.PI * 2);
+      ctx.moveTo(sway, -24);
+      ctx.lineTo(20 + sway, -6);
+      ctx.lineTo(-20 + sway, -6);
+      ctx.closePath();
       ctx.fill();
-
-      // Mid highlights
-      ctx.fillStyle = '#418a2d';
+      ctx.fillStyle = '#205926'; // Mid green
       ctx.beginPath();
-      ctx.arc(-8 + sway, -32, 16, 0, Math.PI * 2);
-      ctx.arc(8 + sway, -30, 16, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Top sun-lit leaves
-      ctx.fillStyle = '#5fb33f';
-      ctx.beginPath();
-      ctx.arc(-2 + sway, -40, 14, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (type === 'pine_tree') {
-      // Pine / Spruce Tree
-      ctx.fillStyle = 'rgba(0,0,0,0.3)';
-      ctx.beginPath();
-      ctx.ellipse(0, 16, 16, 6, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = '#4d3018';
-      ctx.fillRect(-4, 0, 8, 16);
-
-      // 3 Tier Cones
-      ctx.fillStyle = '#1e5222';
-      ctx.beginPath();
-      ctx.moveTo(0, -42);
-      ctx.lineTo(18, -12);
-      ctx.lineTo(-18, -12);
+      ctx.moveTo(sway, -24);
+      ctx.lineTo(16 + sway, -10);
+      ctx.lineTo(-16 + sway, -10);
       ctx.closePath();
       ctx.fill();
 
-      ctx.fillStyle = '#2c6e32';
+      // Middle Tier
+      ctx.fillStyle = '#18451d';
       ctx.beginPath();
-      ctx.moveTo(0, -42);
-      ctx.lineTo(14, -20);
-      ctx.lineTo(-14, -20);
+      ctx.moveTo(sway, -36);
+      ctx.lineTo(16 + sway, -20);
+      ctx.lineTo(-16 + sway, -20);
       ctx.closePath();
       ctx.fill();
+      ctx.fillStyle = '#286e30';
+      ctx.beginPath();
+      ctx.moveTo(sway, -36);
+      ctx.lineTo(13 + sway, -23);
+      ctx.lineTo(-13 + sway, -23);
+      ctx.closePath();
+      ctx.fill();
+
+      // Top Tier
+      ctx.fillStyle = '#1f5424';
+      ctx.beginPath();
+      ctx.moveTo(sway, -48);
+      ctx.lineTo(12 + sway, -32);
+      ctx.lineTo(-12 + sway, -32);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#37873f'; // Bright top
+      ctx.beginPath();
+      ctx.moveTo(sway, -48);
+      ctx.lineTo(8 + sway, -36);
+      ctx.lineTo(-8 + sway, -36);
+      ctx.closePath();
+      ctx.fill();
+      // Highlight tip
+      ctx.fillStyle = '#52b05b';
+      ctx.fillRect(-1 + sway, -48, 2, 4);
     } else if (type === 'rock') {
       // Stone Boulder
       ctx.fillStyle = 'rgba(0,0,0,0.3)';
@@ -956,6 +1055,7 @@ export class SpriteRenderer {
       ctx.fillStyle = '#1f1e24';
       ctx.fillRect(-12, -8 + bob, 10, 10);
       ctx.fillRect(4, -6 + bob, 12, 12);
+      ctx.fillRect(-2, 2 + bob, 6, 6);
 
       // Legs
       ctx.fillStyle = '#dcdce3';
@@ -963,32 +1063,68 @@ export class SpriteRenderer {
       ctx.fillRect(-6, 10 + bob, 5, 8);
       ctx.fillRect(6, 10 + bob, 5, 8);
       ctx.fillRect(12, 10 + bob, 5, 8);
+      // Black hooves
+      ctx.fillStyle = '#222226';
+      ctx.fillRect(-14, 16 + bob, 5, 2);
+      ctx.fillRect(-6, 16 + bob, 5, 2);
+      ctx.fillRect(6, 16 + bob, 5, 2);
+      ctx.fillRect(12, 16 + bob, 5, 2);
 
       // Head
       ctx.fillStyle = '#f0f0f5';
       ctx.fillRect(12, -18 + bob, 14, 14);
       // Pink muzzle
       ctx.fillStyle = '#f7b0c7';
-      ctx.fillRect(18, -12 + bob, 8, 8);
-      // Horns
+      ctx.fillRect(18, -12 + bob, 9, 8);
+      ctx.fillStyle = '#b05470';
+      ctx.fillRect(24, -10 + bob, 2, 2); // nostril
+      // Horns & Ears
       ctx.fillStyle = '#e0cf99';
       ctx.fillRect(14, -22 + bob, 3, 5);
-    } else if (type === 'chicken') {
-      // White chicken
+      ctx.fillStyle = '#f0f0f5';
+      ctx.fillRect(10, -18 + bob, 4, 3); // ear
+      // Eye
+      ctx.fillStyle = '#111111';
+      ctx.fillRect(16, -15 + bob, 3, 3);
       ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.arc(0, 0 + bob, 8, 0, Math.PI * 2);
-      ctx.fill();
-      // Red comb
-      ctx.fillStyle = '#e02828';
-      ctx.fillRect(-2, -10 + bob, 4, 3);
-      // Yellow beak
-      ctx.fillStyle = '#ffaa00';
-      ctx.fillRect(6, -2 + bob, 4, 3);
-      // Legs
-      ctx.fillStyle = '#ffaa00';
-      ctx.fillRect(-3, 6 + bob, 2, 5);
-      ctx.fillRect(2, 6 + bob, 2, 5);
+      ctx.fillRect(17, -15 + bob, 1, 1);
+    } else if (type === 'chicken') {
+      // 16-Bit Pixel Art White Hen
+      ctx.fillStyle = '#f4f4f8';
+      ctx.fillRect(-6, -6 + bob, 12, 10);
+      ctx.fillRect(-8, -4 + bob, 16, 7);
+      // Wing
+      ctx.fillStyle = '#e1e1ea';
+      ctx.fillRect(-3, -3 + bob, 7, 5);
+
+      // Red Comb on head
+      ctx.fillStyle = '#dc2626';
+      ctx.fillRect(4, -13 + bob, 4, 4);
+      // Red Wattle
+      ctx.fillRect(7, -6 + bob, 2, 4);
+
+      // Head & Eye
+      ctx.fillStyle = '#f4f4f8';
+      ctx.fillRect(3, -10 + bob, 6, 6);
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(6, -9 + bob, 2, 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(6, -9 + bob, 1, 1);
+
+      // Yellow/Orange Beak
+      ctx.fillStyle = '#f59e0b';
+      ctx.fillRect(9, -7 + bob, 4, 3);
+
+      // Tail feathers
+      ctx.fillStyle = '#e1e1ea';
+      ctx.fillRect(-10, -7 + bob, 4, 4);
+
+      // Orange Walking Feet
+      ctx.fillStyle = '#d97706';
+      ctx.fillRect(-3, 4 + bob, 2, 4);
+      ctx.fillRect(2, 4 + bob, 2, 4);
+      ctx.fillRect(-4, 7 + bob, 4, 1);
+      ctx.fillRect(1, 7 + bob, 4, 1);
     }
 
     ctx.restore();
