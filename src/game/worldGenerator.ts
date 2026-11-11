@@ -2,7 +2,8 @@ import {
   WORLD_WIDTH_TILES, 
   WORLD_HEIGHT_TILES, 
   TILE_TYPES, 
-  TILE_SIZE 
+  TILE_SIZE,
+  ITEMS
 } from './constants';
 import { 
   WorldState, 
@@ -25,31 +26,41 @@ export function generateWorld(): WorldState {
   // Helper for 2D tile index
   const idx = (x: number, y: number) => y * width + x;
 
-  // 1. Generate Biome Base Tiles
+  // 1. Generate Biome Base Tiles for 180x180 Massive World
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
-      // Lake / River in South-West
-      const distToLake = Math.hypot(x - 45, y - 90);
-      if (distToLake < 18) {
+      // Lake & River in South-West (centered at x=60, y=135)
+      const distToLake = Math.hypot(x - 60, y - 135);
+      if (distToLake < 26) {
         tiles[idx(x, y)] = TILE_TYPES.DEEP_WATER;
         continue;
-      } else if (distToLake < 24) {
+      } else if (distToLake < 34) {
         tiles[idx(x, y)] = TILE_TYPES.WATER;
         continue;
-      } else if (distToLake < 28) {
+      } else if (distToLake < 40) {
         tiles[idx(x, y)] = TILE_TYPES.SAND;
         continue;
       }
 
       // Desert in Far East
-      if (x > 95) {
+      if (x > 135) {
         tiles[idx(x, y)] = TILE_TYPES.SAND;
         continue;
       }
 
-      // Rocky Mountain in North
-      if (y < 25) {
-        if (Math.random() < 0.6) {
+      // Snow Biome (Tundra & Frozen Peaks) in North-East
+      if (y < 52 && x > 65) {
+        if (y < 25 && Math.random() < 0.45) {
+          tiles[idx(x, y)] = TILE_TYPES.STONE_GROUND;
+        } else {
+          tiles[idx(x, y)] = TILE_TYPES.SNOW_GROUND;
+        }
+        continue;
+      }
+
+      // Rocky Mountain in North-West
+      if (y < 42 && x <= 65) {
+        if (Math.random() < 0.65) {
           tiles[idx(x, y)] = TILE_TYPES.STONE_GROUND;
         } else {
           tiles[idx(x, y)] = TILE_TYPES.GRASS;
@@ -57,8 +68,8 @@ export function generateWorld(): WorldState {
         continue;
       }
 
-      // Ancient Ruins in North-West
-      if (x < 30 && y < 45) {
+      // Ancient Ruins in West
+      if (x < 42 && y >= 45 && y < 95) {
         if (Math.random() < 0.7) {
           tiles[idx(x, y)] = TILE_TYPES.RUINS_FLOOR;
         } else {
@@ -67,7 +78,7 @@ export function generateWorld(): WorldState {
         continue;
       }
 
-      // Default Forest Grass
+      // Default Lush Forest Grass
       tiles[idx(x, y)] = TILE_TYPES.GRASS;
     }
   }
@@ -101,6 +112,117 @@ export function generateWorld(): WorldState {
     height: TILE_SIZE,
     hp: 200,
     maxHp: 200,
+  });
+
+  // Helper to construct ruined houses with lootable chests
+  const createRuinedHouse = (
+    rx: number,
+    ry: number,
+    houseType: 'ruins' | 'wood' | 'snow' | 'shore'
+  ) => {
+    const wallType = (houseType === 'ruins' || houseType === 'snow') ? 'stone_wall' : 'wood_wall';
+    const floorType = houseType === 'ruins' ? TILE_TYPES.RUINS_FLOOR : TILE_TYPES.WOOD_FLOOR;
+
+    for (let dy = 0; dy < 5; dy++) {
+      for (let dx = 0; dx < 5; dx++) {
+        const tx = rx + dx;
+        const ty = ry + dy;
+        if (tx >= 0 && tx < width && ty >= 0 && ty < height) {
+          tiles[idx(tx, ty)] = floorType;
+
+          const isBorder = dx === 0 || dx === 4 || dy === 0 || dy === 4;
+          const isDoor = dy === 4 && dx === 2;
+          const isGap = (dx === 1 && dy === 0) || (dx === 4 && dy === 2);
+
+          if (isBorder && !isDoor && !isGap) {
+            structures.push({
+              id: `ruin_wall_${rx}_${ry}_${dx}_${dy}`,
+              type: wallType,
+              tileX: tx,
+              tileY: ty,
+              x: tx * TILE_SIZE + TILE_SIZE / 2,
+              y: ty * TILE_SIZE + TILE_SIZE / 2,
+              width: TILE_SIZE,
+              height: TILE_SIZE,
+              hp: 120,
+              maxHp: 120,
+            });
+          }
+        }
+      }
+    }
+
+    // Chest with survival loot
+    const chestInv = new Array(16).fill(null);
+    if (houseType === 'ruins') {
+      chestInv[0] = { item: ITEMS['bandage'], quantity: 4 };
+      chestInv[1] = { item: ITEMS['torch'], quantity: 6 };
+      chestInv[2] = { item: ITEMS['iron_ingot'], quantity: 4 };
+      chestInv[3] = { item: ITEMS['iron_pickaxe'], quantity: 1 };
+      chestInv[4] = { item: ITEMS['bread'], quantity: 3 };
+    } else if (houseType === 'wood') {
+      chestInv[0] = { item: ITEMS['wooden_hammer'], quantity: 1 };
+      chestInv[1] = { item: ITEMS['wood_plank'], quantity: 12 };
+      chestInv[2] = { item: ITEMS['apple'], quantity: 5 };
+      chestInv[3] = { item: ITEMS['torch'], quantity: 4 };
+    } else if (houseType === 'snow') {
+      chestInv[0] = { item: ITEMS['leather_boots'], quantity: 1 };
+      chestInv[1] = { item: ITEMS['torch'], quantity: 8 };
+      chestInv[2] = { item: ITEMS['cooked_meat'], quantity: 4 };
+      chestInv[3] = { item: ITEMS['gold_ore'], quantity: 3 };
+    } else {
+      chestInv[0] = { item: ITEMS['bandage'], quantity: 3 };
+      chestInv[1] = { item: ITEMS['wood_plank'], quantity: 8 };
+      chestInv[2] = { item: ITEMS['cooked_meat'], quantity: 3 };
+      chestInv[3] = { item: ITEMS['torch'], quantity: 4 };
+    }
+
+    structures.push({
+      id: `ruin_chest_${rx}_${ry}`,
+      type: 'chest',
+      tileX: rx + 2,
+      tileY: ry + 1,
+      x: (rx + 2) * TILE_SIZE + TILE_SIZE / 2,
+      y: (ry + 1) * TILE_SIZE + TILE_SIZE / 2,
+      width: TILE_SIZE,
+      height: TILE_SIZE,
+      hp: 150,
+      maxHp: 150,
+      chestInventory: chestInv,
+    });
+  };
+
+  // Generate 4 Ruined Houses across the world
+  createRuinedHouse(24, 64, 'ruins');
+  createRuinedHouse(85, 45, 'wood');
+  createRuinedHouse(115, 35, 'snow');
+  createRuinedHouse(95, 125, 'shore');
+
+  // Cave Entrances in Mountains and Snow Peaks
+  structures.push({
+    id: 'cave_entrance_mountain',
+    type: 'cave_entrance',
+    tileX: 38,
+    tileY: 28,
+    x: 38 * TILE_SIZE + TILE_SIZE / 2,
+    y: 28 * TILE_SIZE + TILE_SIZE / 2,
+    width: TILE_SIZE * 1.5,
+    height: TILE_SIZE * 1.5,
+    hp: 9999,
+    maxHp: 9999,
+  });
+
+  structures.push({
+    id: 'cave_entrance_snow',
+    type: 'cave_entrance',
+    tileX: 130,
+    tileY: 24,
+    x: 130 * TILE_SIZE + TILE_SIZE / 2,
+    y: 24 * TILE_SIZE + TILE_SIZE / 2,
+    width: TILE_SIZE * 1.5,
+    height: TILE_SIZE * 1.5,
+    hp: 9999,
+    maxHp: 9999,
   });
 
   // Scatter loose branches and loose stones right around the clearing so the player can collect by hand
@@ -280,9 +402,28 @@ export function generateWorld(): WorldState {
 
       const rand = Math.random();
 
-      // Rocky Mountain Area (High iron and gold)
-      if (ty < 25 && rand < 0.18) {
-        if (rand < 0.08) {
+      // Rocky Mountain Area (High iron, copper, gold, flint)
+      if (ty < 25 && rand < 0.22) {
+        if (rand < 0.06) {
+          resources.push({
+            id: `copper_${resCount++}`,
+            type: 'copper_ore',
+            tileX: tx,
+            tileY: ty,
+            x: tx * TILE_SIZE + TILE_SIZE / 2,
+            y: ty * TILE_SIZE + TILE_SIZE / 2,
+            width: TILE_SIZE,
+            height: TILE_SIZE,
+            hp: 50,
+            maxHp: 50,
+            hitFlash: 0,
+            resourceId: 'copper_ore',
+            yieldMin: 2,
+            yieldMax: 4,
+            secondaryResourceId: 'flint',
+            secondaryYield: 1,
+          });
+        } else if (rand < 0.12) {
           resources.push({
             id: `iron_${resCount++}`,
             type: 'iron_ore',
@@ -301,7 +442,7 @@ export function generateWorld(): WorldState {
             secondaryResourceId: 'stone',
             secondaryYield: 2,
           });
-        } else if (rand < 0.12) {
+        } else if (rand < 0.16) {
           resources.push({
             id: `gold_${resCount++}`,
             type: 'gold_ore',
@@ -341,21 +482,135 @@ export function generateWorld(): WorldState {
         continue;
       }
 
-      // Temperate Forest
-      if (t === TILE_TYPES.GRASS && rand < 0.15) {
-        if (rand < 0.08) {
-          // Oak tree
+      // Shore / Beach / Desert areas (Clay & Sand)
+      if (t === TILE_TYPES.SAND && rand < 0.12) {
+        if (rand < 0.06) {
           resources.push({
-            id: `tree_${resCount++}`,
-            type: 'tree',
+            id: `clay_${resCount++}`,
+            type: 'clay_deposit',
             tileX: tx,
             tileY: ty,
             x: tx * TILE_SIZE + TILE_SIZE / 2,
             y: ty * TILE_SIZE + TILE_SIZE / 2,
-            width: TILE_SIZE * 1.2,
+            width: TILE_SIZE * 0.9,
+            height: TILE_SIZE * 0.9,
+            hp: 30,
+            maxHp: 30,
+            hitFlash: 0,
+            resourceId: 'clay',
+            yieldMin: 2,
+            yieldMax: 4,
+            secondaryResourceId: 'sand',
+            secondaryYield: 1,
+          });
+        } else {
+          resources.push({
+            id: `sand_${resCount++}`,
+            type: 'sand_pile',
+            tileX: tx,
+            tileY: ty,
+            x: tx * TILE_SIZE + TILE_SIZE / 2,
+            y: ty * TILE_SIZE + TILE_SIZE / 2,
+            width: TILE_SIZE * 0.8,
+            height: TILE_SIZE * 0.8,
+            hp: 25,
+            maxHp: 25,
+            hitFlash: 0,
+            resourceId: 'sand',
+            yieldMin: 2,
+            yieldMax: 5,
+          });
+        }
+        continue;
+      }
+
+      // Snow Biome Resources (Snowy Pines, Diamond Ore, Frozen Rocks)
+      if (t === TILE_TYPES.SNOW_GROUND && rand < 0.16) {
+        if (rand < 0.03) {
+          // Rare Diamond Ore Vein
+          resources.push({
+            id: `diamond_${resCount++}`,
+            type: 'diamond_ore',
+            tileX: tx,
+            tileY: ty,
+            x: tx * TILE_SIZE + TILE_SIZE / 2,
+            y: ty * TILE_SIZE + TILE_SIZE / 2,
+            width: TILE_SIZE,
+            height: TILE_SIZE,
+            scale: 1.0 + Math.random() * 0.2,
+            hp: 90,
+            maxHp: 90,
+            hitFlash: 0,
+            resourceId: 'diamond_ore_item',
+            yieldMin: 1,
+            yieldMax: 2,
+            secondaryResourceId: 'diamond',
+            secondaryYield: 1,
+          });
+        } else if (rand < 0.10) {
+          // Snowy Pine Tree
+          const scale = 0.9 + Math.random() * 0.4;
+          resources.push({
+            id: `snow_pine_${resCount++}`,
+            type: 'snowy_pine',
+            tileX: tx,
+            tileY: ty,
+            x: tx * TILE_SIZE + TILE_SIZE / 2,
+            y: ty * TILE_SIZE + TILE_SIZE / 2,
+            width: TILE_SIZE * 1.1,
             height: TILE_SIZE * 1.5,
-            hp: 50,
-            maxHp: 50,
+            scale,
+            hp: 55,
+            maxHp: 55,
+            hitFlash: 0,
+            resourceId: 'wood',
+            yieldMin: 3,
+            yieldMax: 5,
+            secondaryResourceId: 'resin',
+            secondaryYield: 2,
+          });
+        } else {
+          // Frozen Rock
+          resources.push({
+            id: `snow_rock_${resCount++}`,
+            type: 'rock',
+            tileX: tx,
+            tileY: ty,
+            x: tx * TILE_SIZE + TILE_SIZE / 2,
+            y: ty * TILE_SIZE + TILE_SIZE / 2,
+            width: TILE_SIZE,
+            height: TILE_SIZE,
+            scale: 0.9 + Math.random() * 0.3,
+            hp: 45,
+            maxHp: 45,
+            hitFlash: 0,
+            resourceId: 'stone',
+            yieldMin: 2,
+            yieldMax: 4,
+            secondaryResourceId: 'flint',
+            secondaryYield: 1,
+          });
+        }
+        continue;
+      }
+
+      // Temperate Forest (Diverse Oak, Birch, Pine, Willow, Bushes)
+      if (t === TILE_TYPES.GRASS && rand < 0.16) {
+        if (rand < 0.05) {
+          // Sturdy Oak Tree
+          const scale = 1.0 + Math.random() * 0.35;
+          resources.push({
+            id: `oak_${resCount++}`,
+            type: 'oak_tree',
+            tileX: tx,
+            tileY: ty,
+            x: tx * TILE_SIZE + TILE_SIZE / 2,
+            y: ty * TILE_SIZE + TILE_SIZE / 2,
+            width: TILE_SIZE * 1.3,
+            height: TILE_SIZE * 1.6,
+            scale,
+            hp: 55,
+            maxHp: 55,
             hitFlash: 0,
             resourceId: 'wood',
             yieldMin: 3,
@@ -363,19 +618,21 @@ export function generateWorld(): WorldState {
             secondaryResourceId: 'apple',
             secondaryYield: 1,
           });
-        } else if (rand < 0.11) {
-          // Pine tree
+        } else if (rand < 0.08) {
+          // Elegant Birch Tree (White bark)
+          const scale = 0.85 + Math.random() * 0.3;
           resources.push({
-            id: `pine_${resCount++}`,
-            type: 'pine_tree',
+            id: `birch_${resCount++}`,
+            type: 'birch_tree',
             tileX: tx,
             tileY: ty,
             x: tx * TILE_SIZE + TILE_SIZE / 2,
             y: ty * TILE_SIZE + TILE_SIZE / 2,
-            width: TILE_SIZE,
+            width: TILE_SIZE * 1.0,
             height: TILE_SIZE * 1.4,
-            hp: 45,
-            maxHp: 45,
+            scale,
+            hp: 40,
+            maxHp: 40,
             hitFlash: 0,
             resourceId: 'wood',
             yieldMin: 2,
@@ -383,8 +640,53 @@ export function generateWorld(): WorldState {
             secondaryResourceId: 'branch',
             secondaryYield: 2,
           });
-        } else if (rand < 0.13) {
+        } else if (rand < 0.11) {
+          // Towering Pine tree
+          const scale = 0.95 + Math.random() * 0.35;
+          resources.push({
+            id: `pine_${resCount++}`,
+            type: 'pine_tree',
+            tileX: tx,
+            tileY: ty,
+            x: tx * TILE_SIZE + TILE_SIZE / 2,
+            y: ty * TILE_SIZE + TILE_SIZE / 2,
+            width: TILE_SIZE * 1.1,
+            height: TILE_SIZE * 1.5,
+            scale,
+            hp: 48,
+            maxHp: 48,
+            hitFlash: 0,
+            resourceId: 'wood',
+            yieldMin: 2,
+            yieldMax: 4,
+            secondaryResourceId: 'resin',
+            secondaryYield: 2,
+          });
+        } else if (rand < 0.125) {
+          // Weeping Willow tree
+          const scale = 1.0 + Math.random() * 0.3;
+          resources.push({
+            id: `willow_${resCount++}`,
+            type: 'willow_tree',
+            tileX: tx,
+            tileY: ty,
+            x: tx * TILE_SIZE + TILE_SIZE / 2,
+            y: ty * TILE_SIZE + TILE_SIZE / 2,
+            width: TILE_SIZE * 1.3,
+            height: TILE_SIZE * 1.5,
+            scale,
+            hp: 50,
+            maxHp: 50,
+            hitFlash: 0,
+            resourceId: 'wood',
+            yieldMin: 3,
+            yieldMax: 5,
+            secondaryResourceId: 'fiber',
+            secondaryYield: 3,
+          });
+        } else if (rand < 0.14) {
           // Berry bush
+          const scale = 0.8 + Math.random() * 0.3;
           resources.push({
             id: `bush_${resCount++}`,
             type: 'berry_bush',
@@ -394,6 +696,7 @@ export function generateWorld(): WorldState {
             y: ty * TILE_SIZE + TILE_SIZE / 2,
             width: TILE_SIZE * 0.8,
             height: TILE_SIZE * 0.8,
+            scale,
             hp: 20,
             maxHp: 20,
             hitFlash: 0,
@@ -403,30 +706,83 @@ export function generateWorld(): WorldState {
             secondaryResourceId: 'fiber',
             secondaryYield: 2,
           });
-        } else {
-          // Herb or fallen log
+        } else if (rand < 0.15) {
+          // Flowering bush
+          const scale = 0.8 + Math.random() * 0.3;
           resources.push({
-            id: `herb_${resCount++}`,
-            type: 'medicinal_plant',
+            id: `flowering_${resCount++}`,
+            type: 'flowering_bush',
             tileX: tx,
             tileY: ty,
             x: tx * TILE_SIZE + TILE_SIZE / 2,
             y: ty * TILE_SIZE + TILE_SIZE / 2,
-            width: TILE_SIZE * 0.6,
-            height: TILE_SIZE * 0.6,
-            hp: 15,
-            maxHp: 15,
+            width: TILE_SIZE * 0.8,
+            height: TILE_SIZE * 0.8,
+            scale,
+            hp: 18,
+            maxHp: 18,
             hitFlash: 0,
-            resourceId: 'medicinal_herb',
+            resourceId: 'fiber',
+            yieldMin: 2,
+            yieldMax: 3,
+            secondaryResourceId: 'medicinal_herb',
+            secondaryYield: 1,
+          });
+        } else {
+          // Wild Shrub / Herb
+          const scale = 0.75 + Math.random() * 0.3;
+          resources.push({
+            id: `shrub_${resCount++}`,
+            type: 'wild_shrub',
+            tileX: tx,
+            tileY: ty,
+            x: tx * TILE_SIZE + TILE_SIZE / 2,
+            y: ty * TILE_SIZE + TILE_SIZE / 2,
+            width: TILE_SIZE * 0.7,
+            height: TILE_SIZE * 0.7,
+            scale,
+            hp: 16,
+            maxHp: 16,
+            hitFlash: 0,
+            resourceId: 'fiber',
             yieldMin: 1,
             yieldMax: 2,
+            secondaryResourceId: 'branch',
+            secondaryYield: 1,
           });
         }
       }
     }
   }
 
-  // 4. Populate world with scattered animals & wild enemies
+  // 4. Populate world with diverse scattered animals (rabbits, pigs, deer, cows, chickens, foxes)
+  const animalTypes: ('rabbit' | 'chicken' | 'pig' | 'deer' | 'fox' | 'cow')[] = [
+    'rabbit', 'rabbit', 'chicken', 'pig', 'deer', 'deer', 'fox', 'cow'
+  ];
+  for (let i = 0; i < 28; i++) {
+    const rx = 8 + Math.floor(Math.random() * (width - 16));
+    const ry = 8 + Math.floor(Math.random() * (height - 16));
+    const t = tiles[idx(rx, ry)];
+    if (t === TILE_TYPES.WATER || t === TILE_TYPES.DEEP_WATER) continue;
+
+    const aType = animalTypes[i % animalTypes.length];
+    animals.push({
+      id: `wild_${aType}_${i}`,
+      type: aType,
+      x: rx * TILE_SIZE,
+      y: ry * TILE_SIZE,
+      vx: 0,
+      vy: 0,
+      facing: Math.random() < 0.5 ? 'left' : 'right',
+      hp: aType === 'chicken' || aType === 'rabbit' ? 20 : aType === 'fox' ? 30 : aType === 'pig' ? 45 : 60,
+      maxHp: aType === 'chicken' || aType === 'rabbit' ? 20 : aType === 'fox' ? 30 : aType === 'pig' ? 45 : 60,
+      state: 'graze',
+      stateTimer: 2 + Math.random() * 4,
+      hitFlash: 0,
+    });
+  }
+
+  // 5. Populate world with scattered enemies
   for (let i = 0; i < 25; i++) {
     const rx = 10 + Math.floor(Math.random() * (width - 20));
     const ry = 10 + Math.floor(Math.random() * (height - 20));
@@ -501,7 +857,242 @@ export function generateWorld(): WorldState {
     weather: 'sunny',
     weatherTimer: 180,
     rainIntensity: 0,
+    snowIntensity: 0,
+    disasterType: 'none',
+    disasterTimer: 0,
+    disasterWarning: '',
     windAngle: Math.PI / 6,
     lightningTimer: 0,
+  };
+}
+
+export function generateCaveWorld(): WorldState {
+  const width = 60;
+  const height = 60;
+  const tiles = new Uint8Array(width * height);
+  const resources: ResourceNode[] = [];
+  const structures: StructureEntity[] = [];
+  const enemies: EnemyEntity[] = [];
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (x < 3 || x >= width - 3 || y < 3 || y >= height - 3 || (Math.random() < 0.12 && Math.hypot(x - 30, y - 30) > 8)) {
+        tiles[y * width + x] = TILE_TYPES.CAVE_WALL;
+      } else {
+        tiles[y * width + x] = TILE_TYPES.CAVE_GROUND;
+      }
+    }
+  }
+
+  // Cave exit ladder at center
+  structures.push({
+    id: 'cave_exit_ladder',
+    type: 'cave_exit',
+    tileX: 30,
+    tileY: 30,
+    x: 30 * TILE_SIZE + TILE_SIZE / 2,
+    y: 30 * TILE_SIZE + TILE_SIZE / 2,
+    width: TILE_SIZE,
+    height: TILE_SIZE,
+    hp: 9999,
+    maxHp: 9999,
+  });
+
+  // Glowing floor torches near the entrance
+  structures.push({
+    id: 'cave_torch_1',
+    type: 'floor_torch',
+    tileX: 28,
+    tileY: 30,
+    x: 28 * TILE_SIZE + TILE_SIZE / 2,
+    y: 30 * TILE_SIZE + TILE_SIZE / 2,
+    width: TILE_SIZE,
+    height: TILE_SIZE,
+    hp: 100,
+    maxHp: 100,
+    lit: true,
+  });
+
+  // Dense rare ores & crystals in the cavern
+  let resId = 0;
+  for (let ty = 4; ty < height - 4; ty++) {
+    for (let tx = 4; tx < width - 4; tx++) {
+      if (Math.hypot(tx - 30, ty - 30) < 6) continue;
+      if (tiles[ty * width + tx] !== TILE_TYPES.CAVE_GROUND) continue;
+
+      const r = Math.random();
+      if (r < 0.05) {
+        resources.push({
+          id: `cave_diamond_${resId++}`,
+          type: 'diamond_ore',
+          tileX: tx,
+          tileY: ty,
+          x: tx * TILE_SIZE + TILE_SIZE / 2,
+          y: ty * TILE_SIZE + TILE_SIZE / 2,
+          width: TILE_SIZE,
+          height: TILE_SIZE,
+          hp: 120,
+          maxHp: 120,
+          hitFlash: 0,
+          resourceId: 'diamond_gem',
+          yieldMin: 1,
+          yieldMax: 2,
+        });
+      } else if (r < 0.10) {
+        resources.push({
+          id: `cave_crystal_${resId++}`,
+          type: 'cave_crystal',
+          tileX: tx,
+          tileY: ty,
+          x: tx * TILE_SIZE + TILE_SIZE / 2,
+          y: ty * TILE_SIZE + TILE_SIZE / 2,
+          width: TILE_SIZE,
+          height: TILE_SIZE,
+          hp: 50,
+          maxHp: 50,
+          hitFlash: 0,
+          resourceId: 'cave_crystal',
+          yieldMin: 2,
+          yieldMax: 4,
+        });
+      } else if (r < 0.16) {
+        resources.push({
+          id: `cave_gold_${resId++}`,
+          type: 'gold_ore',
+          tileX: tx,
+          tileY: ty,
+          x: tx * TILE_SIZE + TILE_SIZE / 2,
+          y: ty * TILE_SIZE + TILE_SIZE / 2,
+          width: TILE_SIZE,
+          height: TILE_SIZE,
+          hp: 80,
+          maxHp: 80,
+          hitFlash: 0,
+          resourceId: 'gold_ore',
+          yieldMin: 2,
+          yieldMax: 4,
+        });
+      } else if (r < 0.22) {
+        resources.push({
+          id: `cave_iron_${resId++}`,
+          type: 'iron_ore',
+          tileX: tx,
+          tileY: ty,
+          x: tx * TILE_SIZE + TILE_SIZE / 2,
+          y: ty * TILE_SIZE + TILE_SIZE / 2,
+          width: TILE_SIZE,
+          height: TILE_SIZE,
+          hp: 60,
+          maxHp: 60,
+          hitFlash: 0,
+          resourceId: 'iron_ore',
+          yieldMin: 2,
+          yieldMax: 5,
+        });
+      } else if (r < 0.28) {
+        resources.push({
+          id: `cave_stalag_${resId++}`,
+          type: 'stalagmite',
+          tileX: tx,
+          tileY: ty,
+          x: tx * TILE_SIZE + TILE_SIZE / 2,
+          y: ty * TILE_SIZE + TILE_SIZE / 2,
+          width: TILE_SIZE,
+          height: TILE_SIZE,
+          hp: 40,
+          maxHp: 40,
+          hitFlash: 0,
+          resourceId: 'stone',
+          yieldMin: 2,
+          yieldMax: 4,
+        });
+      }
+    }
+  }
+
+  // Dangerous underground enemies
+  enemies.push(
+    {
+      id: 'cave_skel_1',
+      type: 'skeleton',
+      x: 18 * TILE_SIZE,
+      y: 20 * TILE_SIZE,
+      vx: 0, vy: 0, facing: 'right',
+      hp: 50, maxHp: 50, damage: 16, speed: 55, attackRange: 180, aggroRange: 220,
+      attackCooldown: 1.8, attackTimer: 0, telegraphTimer: 0, hitFlash: 0, state: 'wander', stateTimer: 3, deathTimer: 0
+    },
+    {
+      id: 'cave_skel_2',
+      type: 'skeleton',
+      x: 42 * TILE_SIZE,
+      y: 38 * TILE_SIZE,
+      vx: 0, vy: 0, facing: 'left',
+      hp: 50, maxHp: 50, damage: 16, speed: 55, attackRange: 180, aggroRange: 220,
+      attackCooldown: 1.8, attackTimer: 0, telegraphTimer: 0, hitFlash: 0, state: 'wander', stateTimer: 3, deathTimer: 0
+    },
+    {
+      id: 'cave_zombie_1',
+      type: 'zombie',
+      x: 35 * TILE_SIZE,
+      y: 18 * TILE_SIZE,
+      vx: 0, vy: 0, facing: 'down',
+      hp: 80, maxHp: 80, damage: 20, speed: 45, attackRange: 32, aggroRange: 190,
+      attackCooldown: 1.4, attackTimer: 0, telegraphTimer: 0, hitFlash: 0, state: 'wander', stateTimer: 4, deathTimer: 0
+    }
+  );
+
+  return {
+    width,
+    height,
+    tileSize: TILE_SIZE,
+    tiles,
+    resources,
+    structures,
+    enemies,
+    animals: [],
+    projectiles: [],
+    lootDrops: [],
+    timeOfDay: 12 * 60,
+    dayCount: 1,
+    weather: 'cloudy',
+    weatherTimer: 9999,
+    rainIntensity: 0,
+    snowIntensity: 0,
+    disasterType: 'none',
+    disasterTimer: 0,
+    disasterWarning: '',
+    windAngle: 0,
+    lightningTimer: 0,
+  };
+}
+
+export function findRandomSafeSpawn(tiles: Uint8Array, width: number, height: number): { x: number; y: number } {
+  for (let attempt = 0; attempt < 50; attempt++) {
+    const tx = 50 + Math.floor(Math.random() * (width - 100));
+    const ty = 50 + Math.floor(Math.random() * (height - 100));
+    const t = tiles[ty * width + tx];
+    if (t === TILE_TYPES.GRASS || t === TILE_TYPES.DIRT_PATH) {
+      let safe = true;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const neighbor = tiles[(ty + dy) * width + (tx + dx)];
+          if (neighbor === TILE_TYPES.WATER || neighbor === TILE_TYPES.DEEP_WATER) {
+            safe = false;
+            break;
+          }
+        }
+        if (!safe) break;
+      }
+      if (safe) {
+        return {
+          x: tx * TILE_SIZE + TILE_SIZE / 2,
+          y: ty * TILE_SIZE + TILE_SIZE / 2,
+        };
+      }
+    }
+  }
+  return {
+    x: 60 * TILE_SIZE + TILE_SIZE / 2,
+    y: 60 * TILE_SIZE + TILE_SIZE / 2,
   };
 }

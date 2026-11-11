@@ -7,12 +7,14 @@ import { soundEngine } from '../game/audio';
 
 interface CraftingModalProps {
   inventory: (InventorySlot | null)[];
+  nearbyStations?: string[];
   onClose: () => void;
   onCraft: (recipe: Recipe) => void;
 }
 
 export const CraftingModal: React.FC<CraftingModalProps> = ({
   inventory,
+  nearbyStations = ['none'],
   onClose,
   onCraft,
 }) => {
@@ -45,6 +47,21 @@ export const CraftingModal: React.FC<CraftingModalProps> = ({
     return count;
   };
 
+  const getStationLabel = (station?: string) => {
+    if (!station || station === 'none') return null;
+    if (station === 'workbench') return '🛠️ Bancada de Trabalho';
+    if (station === 'sawmill') return '🪚 Serraria';
+    if (station === 'furnace') return '♨️ Fornalha';
+    if (station === 'anvil') return '⚓ Bigorna';
+    if (station === 'campfire') return '🔥 Fogueira';
+    return station;
+  };
+
+  const hasRequiredStation = (recipe: Recipe) => {
+    if (!recipe.requiresStation) return true;
+    return nearbyStations.includes(recipe.requiresStation);
+  };
+
   // Check how many times the recipe can be crafted
   const maxCraftCount = selectedRecipe
     ? Math.min(
@@ -56,7 +73,8 @@ export const CraftingModal: React.FC<CraftingModalProps> = ({
     : 0;
 
   const effectiveMultiplier = Math.max(1, Math.min(craftMultiplier, maxCraftCount || 1));
-  const canCraft = selectedRecipe ? canCraftRecipe(inventory, selectedRecipe) : false;
+  const isStationNear = selectedRecipe ? hasRequiredStation(selectedRecipe) : true;
+  const canCraft = selectedRecipe ? (canCraftRecipe(inventory, selectedRecipe, nearbyStations) && isStationNear) : false;
 
   const handleCraft = () => {
     if (!selectedRecipe || !canCraft) return;
@@ -175,13 +193,22 @@ export const CraftingModal: React.FC<CraftingModalProps> = ({
                         <span className="text-[9px] text-gray-400">
                           x{recipe.outputQuantity}
                         </span>
+                        {recipe.requiresStation && (
+                          <span className={`text-[8px] font-semibold mt-0.5 ${hasRequiredStation(recipe) ? 'text-blue-300' : 'text-amber-400'}`}>
+                            {getStationLabel(recipe.requiresStation)}
+                          </span>
+                        )}
                       </div>
                     </div>
 
                     <div className="shrink-0 ml-1">
-                      {affordable ? (
+                      {affordable && hasRequiredStation(recipe) ? (
                         <span className="px-1.5 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-700/80 text-[8px] font-bold">
                           ✓ Pronto
+                        </span>
+                      ) : !hasRequiredStation(recipe) ? (
+                        <span className="px-1 py-0.5 rounded bg-amber-950/70 text-amber-300 border border-amber-700/60 text-[8px] font-medium">
+                          Estação
                         </span>
                       ) : (
                         <span className="text-rose-400/80 text-[8px] font-semibold">
@@ -206,18 +233,30 @@ export const CraftingModal: React.FC<CraftingModalProps> = ({
                   <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-[#181b2b] border-2 border-yellow-400/50 flex items-center justify-center text-2xl sm:text-3xl shadow shrink-0">
                     {outputItem.icon}
                   </div>
-                  <div className="flex flex-col">
+                  <div className="flex flex-col flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <h3 className="font-bold text-xs sm:text-sm text-yellow-300">
+                      <h3 className="font-bold text-xs sm:text-sm text-yellow-300 truncate">
                         {outputItem.name}
                       </h3>
-                      <span className="px-1.5 py-0.2 bg-yellow-500/20 border border-yellow-500/40 text-yellow-300 rounded text-[9px] font-pixel">
+                      <span className="px-1.5 py-0.2 bg-yellow-500/20 border border-yellow-500/40 text-yellow-300 rounded text-[9px] font-pixel shrink-0">
                         +{selectedRecipe.outputQuantity}
                       </span>
                     </div>
                     <p className="text-[10px] text-gray-300 mt-0.5 leading-snug line-clamp-2">
                       {outputItem.description}
                     </p>
+
+                    {/* Station requirement alert */}
+                    {selectedRecipe.requiresStation && (
+                      <div className={`mt-1 text-[9px] font-bold px-2 py-0.5 rounded border flex items-center gap-1 ${
+                        isStationNear
+                          ? 'bg-emerald-950/40 border-emerald-700/60 text-emerald-300'
+                          : 'bg-amber-950/50 border-amber-700/70 text-amber-300'
+                      }`}>
+                        <span>{isStationNear ? '✓' : '⚠️'}</span>
+                        <span>{isStationNear ? 'Estação Próxima:' : 'Requer Estação:'} {getStationLabel(selectedRecipe.requiresStation)}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -226,7 +265,7 @@ export const CraftingModal: React.FC<CraftingModalProps> = ({
                   <div className="flex items-center justify-between text-[9px] sm:text-[10px] font-bold text-gray-400 uppercase tracking-wider">
                     <span>Materiais Necessários:</span>
                     <span className={canCraft ? 'text-emerald-400' : 'text-rose-400'}>
-                      {canCraft ? 'Recursos Suficientes' : 'Recursos Insuficientes'}
+                      {canCraft ? 'Recursos Suficientes' : !isStationNear ? 'Estação Ausente' : 'Recursos Insuficientes'}
                     </span>
                   </div>
 
@@ -268,7 +307,7 @@ export const CraftingModal: React.FC<CraftingModalProps> = ({
               {/* Bottom: Quantity Selector & Pinned Craft Button */}
               <div className="pt-2 border-t border-[#222538] flex flex-col gap-1.5 shrink-0">
                 {/* Multiplier buttons if multiple can be crafted */}
-                {maxCraftCount > 1 && (
+                {maxCraftCount > 1 && isStationNear && (
                   <div className="flex items-center justify-between text-[10px] text-gray-400">
                     <span className="font-medium">Quantidade a fabricar:</span>
                     <div className="flex items-center gap-1">
@@ -303,7 +342,9 @@ export const CraftingModal: React.FC<CraftingModalProps> = ({
                   <span>
                     {canCraft 
                       ? `FABRICAR ${outputItem.name.toUpperCase()} (+${selectedRecipe.outputQuantity * effectiveMultiplier})` 
-                      : 'FALTAM MATERIAIS'}
+                      : !isStationNear
+                        ? `REQUER ${getStationLabel(selectedRecipe.requiresStation)?.toUpperCase()}`
+                        : 'FALTAM MATERIAIS'}
                   </span>
                 </button>
               </div>

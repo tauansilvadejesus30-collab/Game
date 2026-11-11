@@ -11,11 +11,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
   const [sfxVol, setSfxVol] = useState(soundEngine.sfxVolume);
   const [musicVol, setMusicVol] = useState(soundEngine.musicVolume);
   const [isMuted, setIsMuted] = useState(soundEngine.getIsMuted());
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deletedMsg, setDeletedMsg] = useState(false);
 
   const handleSfxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseFloat(e.target.value);
     setSfxVol(val);
     soundEngine.setVolumes(1, val, musicVol);
+    soundEngine.playUiClick();
   };
 
   const handleMusicChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -30,10 +33,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
   };
 
   const handleClearSave = () => {
-    if (confirm('Tem certeza que deseja apagar todo o progresso salvo?')) {
-      clearSavedGame();
-      alert('Progresso salvo apagado com sucesso.');
-    }
+    clearSavedGame();
+    setConfirmDelete(false);
+    setDeletedMsg(true);
+    setTimeout(() => setDeletedMsg(false), 3000);
   };
 
   return (
@@ -89,7 +92,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
 
           <div className="flex flex-col gap-1.5">
             <div className="flex justify-between text-xs text-gray-300">
-              <span>Música Chiptune</span>
+              <span>Música Ambiente (BGM)</span>
               <span className="font-bold tabular-nums">{Math.round(musicVol * 100)}%</span>
             </div>
             <input
@@ -106,14 +109,34 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
 
         {/* Clear Data */}
         <div className="pt-4 border-t border-[#2b2e42] flex justify-between items-center">
-          <span className="text-[11px] text-gray-400">Apagar Dados Salvos</span>
-          <button
-            onClick={handleClearSave}
-            className="px-3 py-1.5 bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-900/50 rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            Limpar Salvo
-          </button>
+          <div>
+            <span className="text-[11px] text-gray-400 block">Apagar Dados Salvos</span>
+            {deletedMsg && <span className="text-[10px] text-emerald-400">Progresso apagado com sucesso!</span>}
+          </div>
+          {confirmDelete ? (
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={handleClearSave}
+                className="px-2.5 py-1 bg-red-600 hover:bg-red-500 text-white rounded-lg text-[10px] font-bold cursor-pointer"
+              >
+                Confirmar
+              </button>
+              <button
+                onClick={() => setConfirmDelete(false)}
+                className="px-2 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg text-[10px] cursor-pointer"
+              >
+                Cancelar
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmDelete(true)}
+              className="px-3 py-1.5 bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-900/50 rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Limpar Salvo
+            </button>
+          )}
         </div>
       </div>
     </div>

@@ -12,6 +12,8 @@ interface InventoryModalProps {
   onEquipItem: (slotIndex: number) => void;
   onDropItem: (slotIndex: number) => void;
   onSplitStack: (slotIndex: number) => void;
+  onSwapSlots?: (fromIndex: number, toIndex: number) => void;
+  onOrganize?: () => void;
 }
 
 export const InventoryModal: React.FC<InventoryModalProps> = ({
@@ -23,10 +25,29 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
   onEquipItem,
   onDropItem,
   onSplitStack,
+  onSwapSlots,
+  onOrganize,
 }) => {
   const [selectedSlotIndex, setSelectedSlotIndex] = useState<number | null>(0);
+  const [movingFromIndex, setMovingFromIndex] = useState<number | null>(null);
 
   const selectedSlot = selectedSlotIndex !== null ? inventory[selectedSlotIndex] : null;
+
+  const handleSlotClick = (idx: number) => {
+    soundEngine.playUiClick();
+    if (movingFromIndex !== null) {
+      if (movingFromIndex !== idx && onSwapSlots) {
+        onSwapSlots(movingFromIndex, idx);
+      }
+      setSelectedSlotIndex(idx);
+      setMovingFromIndex(null);
+    } else {
+      setSelectedSlotIndex(idx);
+    }
+  };
+
+  const bootsSpeed = equipment.boots?.item.speedBonus ?? 0;
+  const totalDefense = (equipment.armor?.item.defense || 0) + (equipment.helmet?.item.defense || 0) + (equipment.boots?.item.defense || 0);
 
   return (
     <div className="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-3">
@@ -37,15 +58,29 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
             <span className="text-xl">🎒</span>
             <h2 className="font-pixel text-xs sm:text-sm text-amber-400">INVENTÁRIO & EQUIPAMENTO</h2>
           </div>
-          <button
-            onClick={() => {
-              soundEngine.playUiClick();
-              onClose();
-            }}
-            className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#25283b] hover:bg-rose-900/60 text-gray-300 hover:text-white flex items-center justify-center cursor-pointer transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            {onOrganize && (
+              <button
+                onClick={() => {
+                  soundEngine.playUiClick();
+                  onOrganize();
+                }}
+                className="px-2.5 py-1 bg-gradient-to-r from-amber-600 to-yellow-500 hover:from-amber-500 hover:to-yellow-400 text-white font-pixel text-[10px] rounded-lg shadow flex items-center gap-1 cursor-pointer transition-transform active:scale-95"
+                title="Agrupar e organizar itens automaticamente"
+              >
+                ✨ Organizar
+              </button>
+            )}
+            <button
+              onClick={() => {
+                soundEngine.playUiClick();
+                onClose();
+              }}
+              className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#25283b] hover:bg-rose-900/60 text-gray-300 hover:text-white flex items-center justify-center cursor-pointer transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* Body */}
@@ -53,28 +88,35 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
           {/* Column 1 & 2: 24 Slots Grid */}
           <div className="sm:col-span-2 flex flex-col gap-2 min-h-0 overflow-y-auto">
             <div className="flex items-center justify-between text-xs text-gray-400 font-bold px-1">
-              <span>MOCHILA ({inventory.filter(Boolean).length}/24)</span>
+              <span className="flex items-center gap-1.5">
+                MOCHILA ({inventory.filter(Boolean).length}/24)
+                {movingFromIndex !== null && (
+                  <span className="text-[10px] text-cyan-400 animate-pulse font-normal">
+                    (Selecione o destino para mover/trocar)
+                  </span>
+                )}
+              </span>
               <span className="text-[10px] text-yellow-400/80 font-pixel">1-8 Barra Rápida</span>
             </div>
 
             <div className="grid grid-cols-6 gap-1.5 sm:gap-2 bg-[#10121a] p-2.5 rounded-xl border border-[#26283b]">
               {inventory.map((slot, idx) => {
                 const isSelected = selectedSlotIndex === idx;
+                const isMoving = movingFromIndex === idx;
                 const isHotbar = idx < 8;
 
                 return (
                   <button
                     key={idx}
-                    onClick={() => {
-                      soundEngine.playUiClick();
-                      setSelectedSlotIndex(idx);
-                    }}
+                    onClick={() => handleSlotClick(idx)}
                     className={`relative aspect-square rounded-lg border-2 flex items-center justify-center transition-all cursor-pointer ${
-                      isSelected 
-                        ? 'border-yellow-400 bg-[#2d334d] scale-105 shadow-[0_0_8px_rgba(250,204,21,0.5)]' 
-                        : isHotbar 
-                          ? 'border-[#3b3f5c] bg-[#1a1c29] hover:border-[#5a608a]' 
-                          : 'border-[#26283b] bg-[#141622] hover:border-[#434766]'
+                      isMoving
+                        ? 'border-cyan-400 bg-[#164e63] scale-105 shadow-[0_0_12px_rgba(34,211,238,0.7)] animate-pulse'
+                        : isSelected 
+                          ? 'border-yellow-400 bg-[#2d334d] scale-105 shadow-[0_0_8px_rgba(250,204,21,0.5)]' 
+                          : isHotbar 
+                            ? 'border-[#3b3f5c] bg-[#1a1c29] hover:border-[#5a608a]' 
+                            : 'border-[#26283b] bg-[#141622] hover:border-[#434766]'
                     }`}
                   >
                     {isHotbar && (
@@ -98,53 +140,70 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
               })}
             </div>
 
-            {/* Equipment Sockets */}
+            {/* Equipment Sockets (5 Columns: Capacete, Armadura, Botas, Mão, Atributos) */}
             <div className="mt-2">
               <span className="text-xs font-bold text-gray-400 px-1">EQUIPAMENTOS</span>
-              <div className="grid grid-cols-4 gap-2 mt-1.5">
+              <div className="grid grid-cols-5 gap-1.5 mt-1.5">
                 {/* Helmet */}
-                <div className="bg-[#12141f] border border-[#2b2e42] p-2 rounded-xl flex items-center gap-2">
-                  <div className="w-10 h-10 rounded-lg bg-[#1a1c29] border border-[#3b3e59] flex items-center justify-center text-lg">
+                <div className="bg-[#12141f] border border-[#2b2e42] p-1.5 rounded-xl flex items-center gap-1.5">
+                  <div className="w-8 h-8 rounded-lg bg-[#1a1c29] border border-[#3b3e59] flex items-center justify-center text-base shrink-0">
                     {equipment.helmet ? equipment.helmet.item.icon : '🧢'}
                   </div>
-                  <div className="flex flex-col text-[10px]">
+                  <div className="flex flex-col text-[9px] min-w-0">
                     <span className="text-gray-400">Capacete</span>
                     <span className="font-bold text-gray-200 truncate">{equipment.helmet?.item.name || 'Nenhum'}</span>
                   </div>
                 </div>
 
                 {/* Armor */}
-                <div className="bg-[#12141f] border border-[#2b2e42] p-2 rounded-xl flex items-center gap-2">
-                  <div className="w-10 h-10 rounded-lg bg-[#1a1c29] border border-[#3b3e59] flex items-center justify-center text-lg">
+                <div className="bg-[#12141f] border border-[#2b2e42] p-1.5 rounded-xl flex items-center gap-1.5">
+                  <div className="w-8 h-8 rounded-lg bg-[#1a1c29] border border-[#3b3e59] flex items-center justify-center text-base shrink-0">
                     {equipment.armor ? equipment.armor.item.icon : '🦺'}
                   </div>
-                  <div className="flex flex-col text-[10px]">
+                  <div className="flex flex-col text-[9px] min-w-0">
                     <span className="text-gray-400">Armadura</span>
                     <span className="font-bold text-gray-200 truncate">{equipment.armor?.item.name || 'Nenhum'}</span>
                   </div>
                 </div>
 
+                {/* Boots */}
+                <div className="bg-[#12141f] border border-[#2b2e42] p-1.5 rounded-xl flex items-center gap-1.5">
+                  <div className="w-8 h-8 rounded-lg bg-[#1a1c29] border border-[#3b3e59] flex items-center justify-center text-base shrink-0">
+                    {equipment.boots ? equipment.boots.item.icon : '🥾'}
+                  </div>
+                  <div className="flex flex-col text-[9px] min-w-0">
+                    <span className="text-gray-400">Botas</span>
+                    <span className="font-bold text-gray-200 truncate">{equipment.boots?.item.name || 'Nenhuma'}</span>
+                  </div>
+                </div>
+
                 {/* Weapon */}
-                <div className="bg-[#12141f] border border-[#2b2e42] p-2 rounded-xl flex items-center gap-2">
-                  <div className="w-10 h-10 rounded-lg bg-[#1a1c29] border border-[#3b3e59] flex items-center justify-center text-lg">
+                <div className="bg-[#12141f] border border-[#2b2e42] p-1.5 rounded-xl flex items-center gap-1.5">
+                  <div className="w-8 h-8 rounded-lg bg-[#1a1c29] border border-[#3b3e59] flex items-center justify-center text-base shrink-0">
                     {equipment.weapon ? equipment.weapon.item.icon : '🗡️'}
                   </div>
-                  <div className="flex flex-col text-[10px]">
-                    <span className="text-gray-400">Mão</span>
+                  <div className="flex flex-col text-[9px] min-w-0">
+                    <span className="text-gray-400">Arma</span>
                     <span className="font-bold text-gray-200 truncate">{equipment.weapon?.item.name || 'Nenhum'}</span>
                   </div>
                 </div>
 
                 {/* Stats Summary */}
-                <div className="bg-[#12141f] border border-[#2b2e42] p-2 rounded-xl flex flex-col justify-center text-[10px]">
+                <div className="bg-[#12141f] border border-[#2b2e42] p-1.5 rounded-xl flex flex-col justify-center text-[9px]">
                   <div className="flex items-center justify-between text-red-300">
-                    <span className="flex items-center gap-1"><Swords className="w-3 h-3" /> Dano:</span>
+                    <span className="flex items-center gap-0.5"><Swords className="w-2.5 h-2.5" /> Dano:</span>
                     <span className="font-bold">{equipment.weapon?.item.damage || 10}</span>
                   </div>
-                  <div className="flex items-center justify-between text-blue-300 mt-1">
-                    <span className="flex items-center gap-1"><Shield className="w-3 h-3" /> Defesa:</span>
-                    <span className="font-bold">{(equipment.armor?.item.defense || 0) + (equipment.helmet?.item.defense || 0)}</span>
+                  <div className="flex items-center justify-between text-blue-300">
+                    <span className="flex items-center gap-0.5"><Shield className="w-2.5 h-2.5" /> Def:</span>
+                    <span className="font-bold">{totalDefense}</span>
                   </div>
+                  {bootsSpeed > 0 && (
+                    <div className="flex items-center justify-between text-emerald-300">
+                      <span className="flex items-center gap-0.5">⚡ Vel:</span>
+                      <span className="font-bold">+{bootsSpeed}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -232,6 +291,22 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                       <Split className="w-3.5 h-3.5" /> Dividir Metade
                     </button>
                   )}
+
+                  <button
+                    onClick={() => {
+                      if (selectedSlotIndex !== null) {
+                        setMovingFromIndex(movingFromIndex === selectedSlotIndex ? null : selectedSlotIndex);
+                        soundEngine.playUiClick();
+                      }
+                    }}
+                    className={`w-full py-1.5 font-bold text-xs rounded-lg border flex items-center justify-center gap-1.5 cursor-pointer transition-colors ${
+                      movingFromIndex === selectedSlotIndex 
+                        ? 'bg-cyan-900/60 border-cyan-400 text-cyan-200' 
+                        : 'bg-[#202436] hover:bg-[#2c324b] text-gray-200 border-[#3b3f5c]'
+                    }`}
+                  >
+                    ⇄ {movingFromIndex === selectedSlotIndex ? 'Cancelar Movimento' : 'Mover / Trocar Slot'}
+                  </button>
 
                   <button
                     onClick={() => selectedSlotIndex !== null && onDropItem(selectedSlotIndex)}

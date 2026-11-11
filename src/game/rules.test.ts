@@ -6,7 +6,10 @@ import {
   calculateTargetTemperature, 
   isTileSolid, 
   canCraftRecipe, 
-  updateSurvivalStats 
+  updateSurvivalStats,
+  updateSwimmingBreath,
+  calculateMovementSpeed,
+  canDismantleWithTool
 } from './rules';
 import { TILE_TYPES, ITEMS, RECIPES } from './constants';
 import { PlayerStats, InventorySlot } from './types';
@@ -89,6 +92,8 @@ test('updateSurvivalStats drains hunger and thirst over time and penalizes starv
     maxEnergy: 100,
     bodyTemp: 36.5,
     sleep: 0,
+    breath: 100,
+    maxBreath: 100,
     xp: 0,
     level: 1,
     skillPoints: 0,
@@ -122,4 +127,70 @@ test('sobrivivencia do zero: craft stone axe and campfire from ground forage', (
   ];
   assert.equal(canCraftRecipe(collectedInventory, stoneAxeRecipe), true, 'Can craft stone axe from ground resources');
 });
+
+test('station proximity enforces tiered crafting requirements', () => {
+  const planksRecipe = RECIPES.find(r => r.id === 'craft_wood_planks')!;
+  assert.equal(planksRecipe.requiresStation, 'workbench', 'Wood planks require workbench');
+
+  const inventoryWithWood: (InventorySlot | null)[] = [
+    { item: ITEMS.wood, quantity: 5 },
+  ];
+
+  // Without workbench nearby: cannot craft
+  assert.equal(canCraftRecipe(inventoryWithWood, planksRecipe, []), false);
+  // With workbench nearby: can craft
+  assert.equal(canCraftRecipe(inventoryWithWood, planksRecipe, ['workbench']), true);
+
+  // Sawmill recipe
+  const canoeRecipe = RECIPES.find(r => r.id === 'craft_canoe')!;
+  const inventoryForCanoe: (InventorySlot | null)[] = [
+    { item: ITEMS.wood_plank, quantity: 12 },
+    { item: ITEMS.resin, quantity: 4 },
+    { item: ITEMS.rope, quantity: 4 },
+  ];
+  assert.equal(canCraftRecipe(inventoryForCanoe, canoeRecipe, ['workbench']), false, 'Canoe requires sawmill, not just workbench');
+  assert.equal(canCraftRecipe(inventoryForCanoe, canoeRecipe, ['workbench', 'sawmill']), true, 'Canoe craftable near sawmill');
+});
+
+test('swimming breath drains in water and boat protects from drowning', () => {
+  const dummyStats: PlayerStats = {
+    hp: 100, maxHp: 100, hunger: 100, maxHunger: 100, thirst: 100, maxThirst: 100,
+    energy: 100, maxEnergy: 100, bodyTemp: 36.5, sleep: 0, breath: 100, maxBreath: 100,
+    xp: 0, level: 1, skillPoints: 0
+  };
+
+  // Swimming for 5 seconds drains breath
+  const swimmingResult = updateSwimmingBreath(dummyStats, 5, true, false);
+  assert.ok(swimmingResult.breath < 100, 'Breath drains when swimming');
+  assert.equal(swimmingResult.drowningDamage, 0, 'No drowning damage when breath > 0');
+
+  // Boating protects and recovers breath
+  const depletedStats = { ...dummyStats, breath: 20 };
+  const boatResult = updateSwimmingBreath(depletedStats, 2, false, true);
+  assert.ok(boatResult.breath > 20, 'Breath recovers in boat');
+  assert.equal(boatResult.drowningDamage, 0, 'No drowning in boat');
+
+  // Movement speed modifiers
+  const landSpeed = calculateMovementSpeed(100, false, false, false);
+  const swimSpeed = calculateMovementSpeed(100, true, false, false);
+  const boatSpeed = calculateMovementSpeed(100, false, true, false);
+
+  assert.ok(swimSpeed < landSpeed, 'Swimming has water drag slowdown');
+  assert.ok(boatSpeed > landSpeed, 'Boating provides fast water traversal');
+});
+
+test('cave ground is walkable and cave wall is solid', () => {
+  assert.equal(isTileSolid(TILE_TYPES.CAVE_WALL), true, 'Cave walls must block movement');
+  assert.equal(isTileSolid(TILE_TYPES.CAVE_GROUND), false, 'Cave ground must be walkable');
+});
+
+test('canDismantleWithTool requires a hammer tool', () => {
+  assert.equal(canDismantleWithTool(null), false, 'Empty hand cannot dismantle structures');
+  assert.equal(canDismantleWithTool(undefined), false);
+  assert.equal(canDismantleWithTool({ id: 'stone_pickaxe', toolType: 'pickaxe' }), false, 'Pickaxe cannot dismantle structures');
+  assert.equal(canDismantleWithTool({ id: 'stone_axe', toolType: 'axe' }), false, 'Axe cannot dismantle structures');
+  assert.equal(canDismantleWithTool({ id: 'wood_hammer', toolType: 'hammer' }), true, 'Wood hammer can dismantle structures');
+  assert.equal(canDismantleWithTool({ id: 'iron_hammer', toolType: 'hammer' }), true, 'Iron hammer can dismantle structures');
+});
+
 

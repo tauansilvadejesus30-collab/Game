@@ -1,8 +1,8 @@
 export type Direction = 'down' | 'up' | 'left' | 'right';
 
-export type BiomeType = 'forest' | 'beach' | 'mountain' | 'desert' | 'ruins';
+export type BiomeType = 'forest' | 'beach' | 'mountain' | 'desert' | 'ruins' | 'snow';
 
-export type WeatherType = 'sunny' | 'cloudy' | 'rain' | 'thunderstorm' | 'snow';
+export type WeatherType = 'sunny' | 'cloudy' | 'rain' | 'thunderstorm' | 'snow' | 'blizzard' | 'heatwave' | 'earthquake';
 
 export type ItemCategory = 
   | 'tool' 
@@ -21,10 +21,11 @@ export interface ItemDef {
   stackable: boolean;
   maxStack: number;
   icon: string;
-  toolType?: 'axe' | 'pickaxe' | 'hoe' | 'rod';
+  toolType?: 'axe' | 'pickaxe' | 'hoe' | 'rod' | 'knife' | 'saw' | 'hammer' | 'spear' | 'sword' | 'bow' | 'shovel';
   toolTier?: number;
   damage?: number;
   defense?: number;
+  speedBonus?: number;
   hunger?: number;
   thirst?: number;
   energy?: number;
@@ -42,6 +43,7 @@ export interface InventorySlot {
 export interface Equipment {
   helmet: InventorySlot | null;
   armor: InventorySlot | null;
+  boots: InventorySlot | null;
   weapon: InventorySlot | null;
   accessory: InventorySlot | null;
 }
@@ -57,7 +59,7 @@ export interface Recipe {
   outputQuantity: number;
   ingredients: RecipeRequirement[];
   category: 'tools' | 'weapons' | 'survival' | 'building' | 'cooking';
-  requiresStation?: 'workbench' | 'campfire' | 'furnace';
+  requiresStation?: 'workbench' | 'campfire' | 'furnace' | 'sawmill' | 'anvil';
 }
 
 export interface SkillNode {
@@ -96,6 +98,8 @@ export interface PlayerStats {
   maxEnergy: number;
   bodyTemp: number; // 36°C normal
   sleep: number;    // 0 (fully rested) to 100 (exhausted)
+  breath: number;   // 0 to 100 for swimming
+  maxBreath: number;
   xp: number;
   level: number;
   skillPoints: number;
@@ -117,16 +121,21 @@ export interface PlayerEntity {
   isRolling: boolean;
   rollTimer: number;
   hitFlash: number;
+  isSwimming: boolean;
+  isBoating: boolean;
+  boatType?: 'raft' | 'canoe' | 'wood_boat' | null;
   stats: PlayerStats;
   inventory: (InventorySlot | null)[];
   selectedHotbarIndex: number;
   equipment: Equipment;
   skills: Record<string, boolean>;
+  spawnPoint?: { x: number; y: number } | null;
+  isInsideCave?: boolean;
 }
 
 export type EnemyType = 'wolf' | 'zombie' | 'skeleton' | 'bear' | 'boss_spectre';
 
-export type AnimalType = 'cow' | 'chicken';
+export type AnimalType = 'cow' | 'chicken' | 'rabbit' | 'pig' | 'deer' | 'fox';
 
 export interface EnemyEntity {
   id: string;
@@ -153,6 +162,8 @@ export interface EnemyEntity {
   targetX?: number;
   targetY?: number;
   deathTimer: number;
+  onFire?: boolean;
+  fireTimer?: number;
 }
 
 export interface AnimalEntity {
@@ -206,10 +217,18 @@ export interface StructureEntity {
     | 'bed' 
     | 'well' 
     | 'workbench' 
+    | 'sawmill'
+    | 'anvil'
+    | 'raft'
+    | 'canoe'
+    | 'wood_boat'
+    | 'stone_wall'
     | 'farmland' 
     | 'scarecrow' 
     | 'wall_torch' 
     | 'floor_torch'
+    | 'cave_entrance'
+    | 'cave_exit'
     | 'pier';
   tileX: number;
   tileY: number;
@@ -234,7 +253,29 @@ export interface StructureEntity {
 
 export interface ResourceNode {
   id: string;
-  type: 'tree' | 'pine_tree' | 'rock' | 'iron_ore' | 'gold_ore' | 'berry_bush' | 'fallen_log' | 'medicinal_plant' | 'loose_branch' | 'loose_stone';
+  type: 
+    | 'tree' 
+    | 'pine_tree' 
+    | 'birch_tree'
+    | 'oak_tree'
+    | 'snowy_pine'
+    | 'willow_tree'
+    | 'rock' 
+    | 'copper_ore' 
+    | 'iron_ore' 
+    | 'gold_ore' 
+    | 'diamond_ore'
+    | 'cave_crystal'
+    | 'stalagmite'
+    | 'berry_bush' 
+    | 'flowering_bush'
+    | 'wild_shrub'
+    | 'fallen_log' 
+    | 'medicinal_plant' 
+    | 'loose_branch' 
+    | 'loose_stone'
+    | 'clay_deposit'
+    | 'sand_pile';
   tileX: number;
   tileY: number;
   x: number;
@@ -250,6 +291,7 @@ export interface ResourceNode {
   secondaryResourceId?: string;
   secondaryYield?: number;
   respawnTime?: number;
+  scale?: number;
 }
 
 export interface Particle {
@@ -262,7 +304,7 @@ export interface Particle {
   color: string;
   size: number;
   alpha: number;
-  type: 'pixel' | 'smoke' | 'fire' | 'spark' | 'water' | 'blood' | 'star' | 'rain' | 'text';
+  type: 'pixel' | 'smoke' | 'fire' | 'spark' | 'water' | 'blood' | 'star' | 'rain' | 'snow' | 'leaf' | 'ember' | 'rubble' | 'splash' | 'text';
   text?: string;
 }
 
@@ -301,8 +343,12 @@ export interface WorldState {
   weather: WeatherType;
   weatherTimer: number;
   rainIntensity: number;
+  snowIntensity: number;
   windAngle: number;
   lightningTimer: number;
+  disasterType?: 'blizzard' | 'heatwave' | 'earthquake' | 'storm' | 'none';
+  disasterTimer?: number;
+  disasterWarning?: string | null;
 }
 
 export interface SaveGameData {

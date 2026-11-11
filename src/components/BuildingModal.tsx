@@ -16,13 +16,18 @@ export const BuildingModal: React.FC<BuildingModalProps> = ({
   onSelectStructure,
 }) => {
   const buildables = [
+    { id: 'workbench', itemId: 'workbench_item', name: 'Bancada de Trabalho', icon: '🛠️', desc: 'Estação principal para fabricar ferramentas avançadas e equipamentos.' },
+    { id: 'sawmill', itemId: 'sawmill_item', name: 'Mesa de Carpintaria', icon: '🪚', desc: 'Processa toras brutas em tábuas nobres e peças para barcos.' },
+    { id: 'furnace', itemId: 'furnace_item', name: 'Fornalha de Pedra', icon: '♨️', desc: 'Fundição para transformar minérios brutos em barras metálicas puras.' },
+    { id: 'anvil', itemId: 'anvil_item', name: 'Bigorna Pesada', icon: '⚓', desc: 'Forja equipamentos resistentes de ferro, ouro e diamante.' },
+    { id: 'campfire', itemId: 'campfire_item', name: 'Fogueira', icon: '🏕️', desc: 'Fornece calor vital à noite, luz e permite assar carnes e peixes.' },
+    { id: 'bed', itemId: 'bed_item', name: 'Cama Confortável', icon: '🛏️', desc: 'Permite dormir à noite para restaurar vida, energia e marca seu ponto de renascimento.' },
+    { id: 'chest', itemId: 'chest_item', name: 'Baú de Madeira', icon: '📦', desc: 'Armazenamento seguro com 16 compartimentos para seus itens.' },
+    { id: 'well', itemId: 'well_item', name: 'Poço Artesiano', icon: '⛲', desc: 'Fonte inesgotável de água pura para beber e regar plantações.' },
     { id: 'wood_wall', itemId: 'wood_wall_item', name: 'Parede de Madeira', icon: '🧱', desc: 'Barricada resistente para erguer sua casa e repelir monstros.' },
+    { id: 'stone_wall', itemId: 'stone_wall_item', name: 'Parede de Pedra', icon: '🪨', desc: 'Fortificação pesada de alta durabilidade contra ataques.' },
     { id: 'wood_door', itemId: 'wood_door_item', name: 'Porta de Madeira', icon: '🚪', desc: 'Porta articulada com trinco. Pode ser aberta e fechada.' },
     { id: 'fence', itemId: 'fence_item', name: 'Cerca de Madeira', icon: '🚧', desc: 'Perfeita para currais de animais e cercar sua horta.' },
-    { id: 'chest', itemId: 'chest_item', name: 'Baú de Madeira', icon: '📦', desc: 'Armazenamento seguro com 16 compartimentos para seus itens.' },
-    { id: 'campfire', itemId: 'campfire_item', name: 'Fogueira', icon: '🏕️', desc: 'Fornece calor vital à noite, luz e permite assar carnes e peixes.' },
-    { id: 'furnace', itemId: 'furnace_item', name: 'Fornalha de Pedra', icon: '♨️', desc: 'Fundição para transformar minérios brutos em barras de ferro puro.' },
-    { id: 'bed', itemId: 'bed_item', name: 'Cama Confortável', icon: '🛏️', desc: 'Permite dormir à noite para restaurar vida, energia e pular o perigo.' },
     { id: 'scarecrow', itemId: 'scarecrow_item', name: 'Espantalho', icon: '🌾', desc: 'Protege seus vegetais contra pragas na plantação.' },
     { id: 'floor_torch', itemId: 'torch', name: 'Tocha de Chão', icon: '🔥', desc: 'Ilumina grandes áreas escuras e afasta criaturas da noite.' },
   ];

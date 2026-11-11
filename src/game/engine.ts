@@ -7,7 +7,8 @@ import {
   LightSource, 
   StructureEntity, 
   InventorySlot,
-  EnemyEntity
+  EnemyEntity,
+  BiomeType
 } from './types';
 import { 
   TILE_SIZE, 
@@ -17,14 +18,17 @@ import {
   WORLD_PIXEL_WIDTH, 
   WORLD_PIXEL_HEIGHT 
 } from './constants';
-import { generateWorld } from './worldGenerator';
+import { generateWorld, generateCaveWorld, findRandomSafeSpawn } from './worldGenerator';
 import { spriteRenderer } from './sprites';
 import { soundEngine } from './audio';
 import { 
   calculateDamage, 
   calculateTargetTemperature, 
   updateSurvivalStats, 
-  isTileSolid 
+  isTileSolid,
+  calculateMovementSpeed,
+  updateSwimmingBreath,
+  canDismantleWithTool
 } from './rules';
 import { saveGame, loadGame } from './saveManager';
 
@@ -33,6 +37,8 @@ export class GameEngine {
   public ctx: CanvasRenderingContext2D;
   private lightCanvas: HTMLCanvasElement;
   private lightCtx: CanvasRenderingContext2D;
+  public cssWidth: number = 0;
+  public cssHeight: number = 0;
 
   public player: PlayerEntity;
   public world: WorldState;
@@ -58,6 +64,11 @@ export class GameEngine {
   // Building mode
   public isBuildingMode: boolean = false;
   public selectedBuildingStructureId: string | null = null;
+
+  // Cave subworld & overworld state
+  public caveWorld: WorldState | null = null;
+  public overworldWorld: WorldState | null = null;
+  public overworldPos: { x: number; y: number } | null = null;
 
   // Particle pool
   public particles: Particle[] = [];
@@ -122,7 +133,14 @@ export class GameEngine {
         isRolling: false,
         rollTimer: 0,
         hitFlash: 0,
-        stats: saved.player.stats,
+        isSwimming: false,
+        isBoating: false,
+        boatType: null,
+        stats: {
+          ...saved.player.stats,
+          breath: saved.player.stats.breath ?? 100,
+          maxBreath: saved.player.stats.maxBreath ?? 100,
+        },
         inventory: saved.player.inventory,
         selectedHotbarIndex: saved.player.selectedHotbarIndex,
         equipment: saved.player.equipment,
@@ -141,10 +159,13 @@ export class GameEngine {
   private createDefaultPlayer(): PlayerEntity {
     // Starting completely from scratch: 0 wood, 0 stone, 0 tools, empty inventory!
     const inventory: (InventorySlot | null)[] = new Array(24).fill(null);
+    const spawn = this.world 
+      ? findRandomSafeSpawn(this.world.tiles, this.world.width, this.world.height)
+      : { x: 75 * TILE_SIZE, y: 75 * TILE_SIZE };
 
     return {
-      x: 60 * TILE_SIZE,
-      y: 60 * TILE_SIZE,
+      x: spawn.x,
+      y: spawn.y,
       vx: 0,
       vy: 0,
       width: 24,
@@ -158,6 +179,9 @@ export class GameEngine {
       isRolling: false,
       rollTimer: 0,
       hitFlash: 0,
+      isSwimming: false,
+      isBoating: false,
+      boatType: null,
       stats: {
         hp: 100,
         maxHp: 100,
@@ -169,6 +193,8 @@ export class GameEngine {
         maxEnergy: 100,
         bodyTemp: 36.5,
         sleep: 0,
+        breath: 100,
+        maxBreath: 100,
         xp: 0,
         level: 1,
         skillPoints: 0,
@@ -178,6 +204,7 @@ export class GameEngine {
       equipment: {
         helmet: null,
         armor: null,
+        boots: null,
         weapon: null,
         accessory: null,
       },
@@ -191,9 +218,11 @@ export class GameEngine {
     const w = Math.floor(rect.width || window.innerWidth);
     const h = Math.floor(rect.height || window.innerHeight);
 
-    this.canvas.width = w * dpr;
-    this.canvas.height = h * dpr;
-    this.ctx.scale(dpr, dpr);
+    this.cssWidth = w;
+    this.cssHeight = h;
+    this.canvas.width = Math.floor(w * dpr);
+    this.canvas.height = Math.floor(h * dpr);
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     this.ctx.imageSmoothingEnabled = false;
 
     this.lightCanvas.width = this.canvas.width;
@@ -253,6 +282,31 @@ export class GameEngine {
       this.isMouseDown = false;
     });
 
+    const handleTouchUpdate = (touch: Touch) => {
+      const rect = this.canvas.getBoundingClientRect();
+      this.mouseScreenX = touch.clientX - rect.left;
+      this.mouseScreenY = touch.clientY - rect.top;
+      this.updateMouseWorldPos();
+    };
+
+    this.canvas.addEventListener('touchstart', (e) => {
+      const touch = e.changedTouches[0];
+      if (touch) {
+        handleTouchUpdate(touch);
+        if (this.isBuildingMode) {
+          e.preventDefault();
+          this.tryPlaceStructure();
+        }
+      }
+    }, { passive: false });
+
+    this.canvas.addEventListener('touchmove', (e) => {
+      const touch = e.changedTouches[0];
+      if (touch) {
+        handleTouchUpdate(touch);
+      }
+    }, { passive: true });
+
     this.canvas.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       // Right-click cancels building mode
@@ -263,8 +317,9 @@ export class GameEngine {
   }
 
   private updateMouseWorldPos() {
-    const halfW = (this.canvas.width / (window.devicePixelRatio || 1)) / 2;
-    const halfH = (this.canvas.height / (window.devicePixelRatio || 1)) / 2;
+    const rect = this.canvas.getBoundingClientRect();
+    const halfW = (rect.width || this.cssWidth || 800) / 2;
+    const halfH = (rect.height || this.cssHeight || 450) / 2;
     this.mouseWorldX = this.cameraX + (this.mouseScreenX - halfW) / this.zoom;
     this.mouseWorldY = this.cameraY + (this.mouseScreenY - halfH) / this.zoom;
   }
@@ -384,17 +439,51 @@ export class GameEngine {
   }
 
   private checkStructureInteraction() {
-    const interactRange = 55;
+    const interactRange = 60;
+    const equipped = this.player.inventory[this.player.selectedHotbarIndex];
+    const isHammer = canDismantleWithTool(equipped?.item);
+
     for (const struct of this.world.structures) {
       const dist = Math.hypot(struct.x - this.player.x, struct.y - this.player.y);
       if (dist <= interactRange) {
-        if (struct.type === 'chest') {
+        // If holding a hammer, dismantle and return item to player!
+        if (isHammer && struct.type !== 'cave_entrance' && struct.type !== 'cave_exit' && struct.type !== 'farmland') {
+          this.dismantleStructure(struct);
+          return;
+        }
+
+        if (struct.type === 'cave_entrance') {
+          this.enterCave();
+          return;
+        } else if (struct.type === 'cave_exit') {
+          this.exitCave();
+          return;
+        } else if (struct.type === 'chest') {
           this.onOpenChest?.(struct);
           return;
         } else if (struct.type === 'campfire' || struct.type === 'furnace') {
           this.onOpenCooking?.(struct);
           return;
+        } else if (struct.type === 'workbench' || struct.type === 'sawmill' || struct.type === 'anvil') {
+          this.onOpenCrafting?.();
+          return;
+        } else if (struct.type === 'raft' || struct.type === 'canoe' || struct.type === 'wood_boat') {
+          if (this.player.isBoating) {
+            this.player.isBoating = false;
+            this.player.boatType = null;
+            this.addFloatingText(this.player.x, this.player.y - 15, 'Desembarcou do Barco', '#ffffff');
+          } else {
+            this.player.isBoating = true;
+            this.player.boatType = struct.type as 'raft' | 'canoe' | 'wood_boat';
+            this.player.isSwimming = false;
+            soundEngine.playCollect();
+            this.addFloatingText(this.player.x, this.player.y - 15, 'Embarcou no Barco!', '#38bdf8');
+          }
+          this.onStateChange?.();
+          return;
         } else if (struct.type === 'bed') {
+          this.player.spawnPoint = { x: struct.x, y: struct.y };
+          this.addFloatingText(this.player.x, this.player.y - 25, 'Cama vinculada! Ponto de renascimento salvo.', '#38bdf8');
           this.sleepInBed();
           return;
         } else if (struct.type === 'well') {
@@ -470,6 +559,104 @@ export class GameEngine {
     this.onStateChange?.();
   }
 
+  public dismantleStructure(struct: StructureEntity) {
+    const refundMap: Record<string, string> = {
+      workbench: 'workbench_item',
+      sawmill: 'sawmill_item',
+      anvil: 'anvil_item',
+      furnace: 'furnace_item',
+      bed: 'bed_item',
+      chest: 'chest_item',
+      campfire: 'campfire_item',
+      well: 'well_item',
+      wood_wall: 'wood_wall_item',
+      cabin_wall: 'wood_wall_item',
+      stone_wall: 'stone_wall_item',
+      wood_door: 'wood_door_item',
+      fence: 'fence_item',
+      scarecrow: 'scarecrow_item',
+      floor_torch: 'torch',
+      wall_torch: 'torch',
+      pier: 'wood_plank',
+      raft: 'raft',
+      canoe: 'canoe',
+      wood_boat: 'wood_boat',
+    };
+
+    const itemId = refundMap[struct.type];
+    if (!itemId || !ITEMS[itemId]) {
+      this.addFloatingText(struct.x, struct.y - 15, 'Não pode ser desmontado!', '#ff5555');
+      return;
+    }
+
+    // Spill any items in chest so player does not lose loot
+    if (struct.chestInventory) {
+      for (const slot of struct.chestInventory) {
+        if (slot) {
+          this.spawnLoot(struct.x, struct.y, slot.item.id, slot.quantity);
+        }
+      }
+    }
+
+    // Remove structure from world
+    const idx = this.world.structures.indexOf(struct);
+    if (idx !== -1) {
+      this.world.structures.splice(idx, 1);
+    }
+
+    // Return item to inventory or drop on ground
+    const itemDef = ITEMS[itemId];
+    const added = this.addItemToInventory(itemDef, 1);
+    if (!added) {
+      this.spawnLoot(struct.x, struct.y, itemId, 1);
+    }
+
+    soundEngine.playBuild();
+    this.spawnBurst(struct.x, struct.y, '#f59e0b', 14);
+    this.addFloatingText(struct.x, struct.y - 25, `Desmontado: +1 ${itemDef.name}`, '#4ade80');
+    this.onStateChange?.();
+  }
+
+  public enterCave() {
+    if (!this.caveWorld) {
+      this.caveWorld = generateCaveWorld();
+    }
+    // Save overworld state & position
+    this.overworldWorld = this.world;
+    this.overworldPos = { x: this.player.x, y: this.player.y + 45 };
+
+    // Transition into cavern
+    this.world = this.caveWorld;
+    this.player.isInsideCave = true;
+    this.player.x = 30 * TILE_SIZE + TILE_SIZE / 2;
+    this.player.y = 31 * TILE_SIZE + TILE_SIZE / 2;
+    this.cameraX = this.player.x;
+    this.cameraY = this.player.y;
+
+    soundEngine.playLevelUp();
+    this.triggerShake(5, 0.4);
+    this.addFloatingText(this.player.x, this.player.y - 30, 'Entrou na Caverna Sombria...', '#67e8f9');
+    this.onStateChange?.();
+  }
+
+  public exitCave() {
+    if (this.overworldWorld) {
+      this.world = this.overworldWorld;
+    }
+    this.player.isInsideCave = false;
+    if (this.overworldPos) {
+      this.player.x = this.overworldPos.x;
+      this.player.y = this.overworldPos.y;
+    }
+    this.cameraX = this.player.x;
+    this.cameraY = this.player.y;
+
+    soundEngine.playLevelUp();
+    this.triggerShake(3, 0.3);
+    this.addFloatingText(this.player.x, this.player.y - 30, 'Retornou à Superfície!', '#facc15');
+    this.onStateChange?.();
+  }
+
   private checkHitBox() {
     const equipped = this.player.inventory[this.player.selectedHotbarIndex];
     let damage = equipped?.item.damage ?? 10;
@@ -516,8 +703,28 @@ export class GameEngine {
 
         if (animal.hp <= 0) {
           soundEngine.playMonsterHurt();
-          this.spawnLoot(animal.x, animal.y, 'raw_meat', 2);
-          this.spawnLoot(animal.x, animal.y, 'leather', 1);
+          if (animal.type === 'chicken') {
+            this.spawnLoot(animal.x, animal.y, 'feather', 2);
+            this.spawnLoot(animal.x, animal.y, 'raw_meat', 1);
+          } else if (animal.type === 'rabbit') {
+            this.spawnLoot(animal.x, animal.y, 'animal_pelt', 1);
+            this.spawnLoot(animal.x, animal.y, 'raw_meat', 1);
+          } else if (animal.type === 'pig') {
+            this.spawnLoot(animal.x, animal.y, 'raw_meat', 2);
+            this.spawnLoot(animal.x, animal.y, 'animal_pelt', 1);
+          } else if (animal.type === 'deer') {
+            this.spawnLoot(animal.x, animal.y, 'animal_pelt', 2);
+            this.spawnLoot(animal.x, animal.y, 'raw_meat', 2);
+            this.spawnLoot(animal.x, animal.y, 'bone', 2);
+          } else if (animal.type === 'fox') {
+            this.spawnLoot(animal.x, animal.y, 'animal_pelt', 2);
+          } else if (animal.type === 'cow') {
+            this.spawnLoot(animal.x, animal.y, 'raw_meat', 3);
+            this.spawnLoot(animal.x, animal.y, 'leather', 2);
+          } else {
+            this.spawnLoot(animal.x, animal.y, 'raw_meat', 2);
+            this.spawnLoot(animal.x, animal.y, 'leather', 1);
+          }
           const idx = this.world.animals.indexOf(animal);
           this.world.animals.splice(idx, 1);
         }
@@ -530,8 +737,8 @@ export class GameEngine {
       if (res.hp <= 0) continue;
       const dist = Math.hypot(res.x - attackX, res.y - attackY);
       if (dist <= attackReach) {
-        // Instant manual pickup for loose branches and stones scattered on ground
-        if (res.type === 'loose_branch' || res.type === 'loose_stone') {
+        // Instant manual pickup for loose branches, stones, clay, and sand
+        if (res.type === 'loose_branch' || res.type === 'loose_stone' || res.type === 'clay_deposit' || res.type === 'sand_pile') {
           const yieldCount = Math.floor(res.yieldMin + Math.random() * (res.yieldMax - res.yieldMin + 1));
           const targetItem = ITEMS[res.resourceId];
           const added = this.addItemToInventory(targetItem, yieldCount);
@@ -539,7 +746,8 @@ export class GameEngine {
             this.spawnLoot(res.x, res.y, res.resourceId, yieldCount);
           }
           soundEngine.playPickup();
-          this.spawnBurst(res.x, res.y, res.type === 'loose_branch' ? '#8f5d34' : '#9ca3af', 5);
+          const burstCol = res.type === 'loose_branch' ? '#8f5d34' : res.type === 'clay_deposit' ? '#c2623b' : res.type === 'sand_pile' ? '#f4d06f' : '#9ca3af';
+          this.spawnBurst(res.x, res.y, burstCol, 5);
           this.addFloatingText(res.x, res.y - 15, `+${yieldCount} ${targetItem?.name || res.resourceId}`, '#fbbf24');
           this.checkQuestProgress('gather', res.resourceId, yieldCount);
 
@@ -552,9 +760,12 @@ export class GameEngine {
         if (res.type.includes('tree') && equipped?.item.toolType === 'axe') {
           isToolMatch = true;
           damage = (equipped.item.damage || 20) * 1.5;
-        } else if (res.type.includes('rock') && equipped?.item.toolType === 'pickaxe') {
+        } else if ((res.type.includes('rock') || res.type.includes('ore')) && equipped?.item.toolType === 'pickaxe') {
           isToolMatch = true;
           damage = (equipped.item.damage || 20) * 1.5;
+        } else if ((res.type.includes('clay') || res.type.includes('sand')) && equipped?.item.toolType === 'shovel') {
+          isToolMatch = true;
+          damage = 35;
         } else if (!equipped) {
           // Punching with bare hands (Sobrevivência do Zero)
           if (res.type.includes('tree')) {
@@ -588,6 +799,9 @@ export class GameEngine {
           this.spawnLoot(res.x, res.y, res.resourceId, yieldCount);
           if (res.secondaryResourceId && res.secondaryYield) {
             this.spawnLoot(res.x, res.y, res.secondaryResourceId, res.secondaryYield);
+          }
+          if (res.type === 'pine_tree') {
+            this.spawnLoot(res.x, res.y, 'resin', 1);
           }
           this.gainPlayerXp(15);
           this.checkQuestProgress('gather', res.resourceId, yieldCount);
@@ -702,36 +916,99 @@ export class GameEngine {
     return false;
   }
 
+  public getNearbyStations(): string[] {
+    const stations: Set<string> = new Set(['none']);
+    const range = 140;
+    for (const s of this.world.structures) {
+      const dist = Math.hypot(s.x - this.player.x, s.y - this.player.y);
+      if (dist <= range) {
+        if (s.type === 'workbench') stations.add('workbench');
+        if (s.type === 'sawmill') stations.add('sawmill');
+        if (s.type === 'furnace') stations.add('furnace');
+        if (s.type === 'anvil') stations.add('anvil');
+        if (s.type === 'campfire' && s.lit) stations.add('campfire');
+      }
+    }
+    return Array.from(stations);
+  }
+
   public tryPlaceStructure() {
     if (!this.selectedBuildingStructureId) return;
 
-    const tileX = Math.floor(this.mouseWorldX / TILE_SIZE);
-    const tileY = Math.floor(this.mouseWorldY / TILE_SIZE);
+    // 1. Clamp placement position to be close to the player (max 96px reach)
+    const MAX_BUILD_REACH = 96;
+    let targetX = this.mouseWorldX;
+    let targetY = this.mouseWorldY;
+    const distFromPlayer = Math.hypot(targetX - this.player.x, targetY - this.player.y);
+
+    if (distFromPlayer > MAX_BUILD_REACH || (targetX === 0 && targetY === 0)) {
+      let forwardX = 0;
+      let forwardY = 0;
+      if (this.player.facing === 'down') forwardY = 48;
+      else if (this.player.facing === 'up') forwardY = -48;
+      else if (this.player.facing === 'left') forwardX = -48;
+      else if (this.player.facing === 'right') forwardX = 48;
+
+      if (distFromPlayer > MAX_BUILD_REACH && (targetX !== 0 || targetY !== 0)) {
+        const angle = Math.atan2(targetY - this.player.y, targetX - this.player.x);
+        targetX = this.player.x + Math.cos(angle) * MAX_BUILD_REACH;
+        targetY = this.player.y + Math.sin(angle) * MAX_BUILD_REACH;
+      } else {
+        targetX = this.player.x + forwardX;
+        targetY = this.player.y + forwardY;
+      }
+    }
+
+    const tileX = Math.floor(targetX / TILE_SIZE);
+    const tileY = Math.floor(targetY / TILE_SIZE);
 
     // Validate bounds
     if (tileX < 2 || tileX >= this.world.width - 2 || tileY < 2 || tileY >= this.world.height - 2) return;
 
+    const isWatercraft = this.selectedBuildingStructureId === 'raft' || 
+                         this.selectedBuildingStructureId === 'canoe' || 
+                         this.selectedBuildingStructureId === 'wood_boat' || 
+                         this.selectedBuildingStructureId === 'pier';
+
     // Check if tile is water
     const tileType = this.world.tiles[tileY * this.world.width + tileX];
-    if (tileType === TILE_TYPES.WATER || tileType === TILE_TYPES.DEEP_WATER) {
-      this.addFloatingText(this.mouseWorldX, this.mouseWorldY, 'Não pode construir na água!', '#ff5555');
+    const isWaterTile = tileType === TILE_TYPES.WATER || tileType === TILE_TYPES.DEEP_WATER;
+
+    if (isWatercraft && !isWaterTile) {
+      this.addFloatingText(targetX, targetY, 'Embarcação deve ser colocada na água!', '#38bdf8');
+      return;
+    }
+    if (!isWatercraft && isWaterTile) {
+      this.addFloatingText(targetX, targetY, 'Não pode construir na água!', '#ff5555');
       return;
     }
 
     // Check if another structure occupies this tile
     const exists = this.world.structures.some(s => s.tileX === tileX && s.tileY === tileY);
     if (exists) {
-      this.addFloatingText(this.mouseWorldX, this.mouseWorldY, 'Espaço ocupado!', '#ff5555');
+      this.addFloatingText(targetX, targetY, 'Espaço ocupado!', '#ff5555');
       return;
     }
 
-    // Consume 1 item from hotbar
-    const equipped = this.player.inventory[this.player.selectedHotbarIndex];
-    if (equipped) {
-      equipped.quantity--;
-      if (equipped.quantity <= 0) {
+    // Consume 1 matching item from hotbar or inventory
+    const hotbarSlot = this.player.inventory[this.player.selectedHotbarIndex];
+    if (hotbarSlot && (hotbarSlot.item.placeableStructureId === this.selectedBuildingStructureId || hotbarSlot.item.id.includes(this.selectedBuildingStructureId))) {
+      hotbarSlot.quantity--;
+      if (hotbarSlot.quantity <= 0) {
         this.player.inventory[this.player.selectedHotbarIndex] = null;
         this.cancelBuildingMode();
+      }
+    } else {
+      for (let i = 0; i < this.player.inventory.length; i++) {
+        const slot = this.player.inventory[i];
+        if (slot && (slot.item.placeableStructureId === this.selectedBuildingStructureId || slot.item.id.includes(this.selectedBuildingStructureId))) {
+          slot.quantity--;
+          if (slot.quantity <= 0) {
+            this.player.inventory[i] = null;
+            this.cancelBuildingMode();
+          }
+          break;
+        }
       }
     }
 
@@ -751,6 +1028,11 @@ export class GameEngine {
       chestInventory: this.selectedBuildingStructureId === 'chest' ? new Array(16).fill(null) : undefined,
     });
 
+    if (this.selectedBuildingStructureId === 'bed') {
+      this.player.spawnPoint = { x: tileX * TILE_SIZE + TILE_SIZE / 2, y: tileY * TILE_SIZE + TILE_SIZE / 2 };
+      this.addFloatingText(this.player.x, this.player.y - 25, 'Ponto de Renascimento Definido!', '#38bdf8');
+    }
+
     this.checkQuestProgress('build', this.selectedBuildingStructureId, 1);
     this.onStateChange?.();
   }
@@ -759,6 +1041,11 @@ export class GameEngine {
     this.isBuildingMode = false;
     this.selectedBuildingStructureId = null;
     this.onStateChange?.();
+  }
+
+  public triggerShake(magnitude: number, duration: number) {
+    this.shakeMagnitude = magnitude;
+    this.shakeDuration = duration;
   }
 
   public spawnBurst(x: number, y: number, color: string, count: number = 10) {
@@ -851,8 +1138,34 @@ export class GameEngine {
       moveY = this.joystickVector.y;
     }
 
+    // Check if player is on water
+    const pTileX = Math.floor(this.player.x / TILE_SIZE);
+    const pTileY = Math.floor(this.player.y / TILE_SIZE);
+    const pTile = (pTileX >= 0 && pTileX < this.world.width && pTileY >= 0 && pTileY < this.world.height)
+      ? this.world.tiles[pTileY * this.world.width + pTileX]
+      : TILE_TYPES.GRASS;
+    const isOnWater = pTile === TILE_TYPES.WATER || pTile === TILE_TYPES.DEEP_WATER;
+
+    if (this.player.isBoating) {
+      this.player.isSwimming = false;
+      if (!isOnWater) {
+        this.player.isBoating = false;
+        this.player.boatType = null;
+        this.addFloatingText(this.player.x, this.player.y - 15, 'Desembarcou na margem', '#ffffff');
+      }
+    } else {
+      this.player.isSwimming = isOnWater;
+    }
+
     const isSprinting = (this.keys.has('ShiftLeft') || this.keys.has('ShiftRight') || this.isTouchSprint) && this.player.stats.energy > 5;
-    let speed = isSprinting ? 160 : 105;
+    let baseSpeed = 105;
+    if (this.player.equipment.boots) {
+      const bootsDef = ITEMS[this.player.equipment.boots.item.id];
+      if (bootsDef?.speedBonus) {
+        baseSpeed += bootsDef.speedBonus;
+      }
+    }
+    let speed = calculateMovementSpeed(baseSpeed, this.player.isSwimming, this.player.isBoating, isSprinting);
     if (this.player.skills['skill_speed']) speed *= 1.2;
 
     const len = Math.hypot(moveX, moveY);
@@ -868,9 +1181,10 @@ export class GameEngine {
         }
       }
 
-      // Footstep sound
+      // Realistic footstep sound with surface acoustic detection!
       if (Math.random() < dt * 3.5) {
-        soundEngine.playFootstep();
+        const surf = isOnWater ? 'water' : (pTile === TILE_TYPES.STONE_GROUND || pTile === TILE_TYPES.RUINS_FLOOR) ? 'stone' : 'grass';
+        soundEngine.playFootstep(surf);
       }
     } else {
       this.player.isMoving = false;
@@ -916,14 +1230,28 @@ export class GameEngine {
     const nearCampfire = this.world.structures.some(s => s.type === 'campfire' && s.lit && Math.hypot(s.x - this.player.x, s.y - this.player.y) < 160);
     const nearTorch = this.world.structures.some(s => (s.type === 'floor_torch' || s.type === 'wall_torch') && Math.hypot(s.x - this.player.x, s.y - this.player.y) < 90);
 
+    const curTileX = Math.floor(this.player.x / TILE_SIZE);
+    const curTileY = Math.floor(this.player.y / TILE_SIZE);
+    const curTile = (curTileX >= 0 && curTileX < this.world.width && curTileY >= 0 && curTileY < this.world.height)
+      ? this.world.tiles[curTileY * this.world.width + curTileX]
+      : TILE_TYPES.GRASS;
+    let currentBiome: BiomeType = 'forest';
+    if (curTile === TILE_TYPES.SNOW_GROUND) currentBiome = 'snow';
+    else if (curTile === TILE_TYPES.SAND) currentBiome = 'desert';
+    else if (curTile === TILE_TYPES.STONE_GROUND) currentBiome = 'mountain';
+    else if (curTile === TILE_TYPES.RUINS_FLOOR) currentBiome = 'ruins';
+
     const targetTemp = calculateTargetTemperature({
       isNight,
       isRaining: this.world.weather === 'rain' || this.world.weather === 'thunderstorm',
-      biome: 'forest',
+      biome: currentBiome,
       nearCampfire,
       nearTorch,
       insideCabin: false,
-      equippedArmorDefense: this.player.equipment.armor?.item.defense ?? 0,
+      equippedArmorDefense: (this.player.equipment.armor?.item.defense ?? 0) + (this.player.equipment.boots?.item.defense ?? 0),
+      isSnowing: this.world.weather === 'snow',
+      isBlizzard: this.world.weather === 'blizzard',
+      isHeatwave: this.world.weather === 'heatwave',
     });
 
     this.player.stats.bodyTemp += (targetTemp - this.player.stats.bodyTemp) * 0.05 * dt;
@@ -935,19 +1263,72 @@ export class GameEngine {
       currentTemperature: this.player.stats.bodyTemp,
     });
 
+    // Swimming breath & drowning simulation
+    const breathResult = updateSwimmingBreath(
+      this.player.stats,
+      dt,
+      this.player.isSwimming,
+      this.player.isBoating
+    );
+    this.player.stats.breath = breathResult.breath;
+    if (breathResult.drowningDamage > 0) {
+      this.damagePlayer(breathResult.drowningDamage);
+      this.addFloatingText(this.player.x, this.player.y - 25, 'Afogando!', '#38bdf8');
+    }
+
     if (this.player.stats.hp <= 0) {
+      this.handlePlayerDeath();
       this.onGameOver?.();
     }
 
     // 5. Day & Night clock progression (24 hours in ~10 minutes)
     this.world.timeOfDay = (this.world.timeOfDay + dt * 2.5) % 1440;
 
-    // 6. Weather updates
+    // Synchronize realistic day/night music and soundscapes
+    soundEngine.setNightMode(isNight);
+
+    // 6. Weather updates & Natural Disasters
     this.world.weatherTimer -= dt;
     if (this.world.weatherTimer <= 0) {
-      this.world.weatherTimer = 240 + Math.random() * 180;
-      const weathers: WorldState['weather'][] = ['sunny', 'cloudy', 'rain', 'thunderstorm'];
-      this.world.weather = weathers[Math.floor(Math.random() * weathers.length)];
+      this.world.weatherTimer = 180 + Math.random() * 120;
+      const weathers: WorldState['weather'][] = [
+        'sunny', 'sunny', 'cloudy', 'rain', 'thunderstorm', 'snow', 'blizzard', 'heatwave', 'earthquake'
+      ];
+      const nextWeather = weathers[Math.floor(Math.random() * weathers.length)];
+      this.world.weather = nextWeather;
+
+      if (nextWeather === 'blizzard') {
+        this.world.disasterType = 'blizzard';
+        this.world.disasterTimer = 75;
+        this.world.disasterWarning = 'ALERTA: Nevasca Violenta se aproxima!';
+        this.addFloatingText(this.player.x, this.player.y - 30, 'ALERTA DE NEVASCA!', '#67e8f9');
+      } else if (nextWeather === 'heatwave') {
+        this.world.disasterType = 'heatwave';
+        this.world.disasterTimer = 75;
+        this.world.disasterWarning = 'ALERTA: Onda de Calor Escaldante! Beba água!';
+        this.addFloatingText(this.player.x, this.player.y - 30, 'ONDA DE CALOR EXTREMA!', '#f97316');
+      } else if (nextWeather === 'earthquake') {
+        this.world.disasterType = 'earthquake';
+        this.world.disasterTimer = 45;
+        this.world.disasterWarning = 'ALERTA: Terremoto! O solo está tremendo!';
+        this.addFloatingText(this.player.x, this.player.y - 30, 'TERREMOTO!', '#eab308');
+        this.triggerShake(12, 3);
+      } else {
+        this.world.disasterType = 'none';
+        this.world.disasterTimer = 0;
+        this.world.disasterWarning = '';
+      }
+    }
+
+    if (this.world.weather === 'snow' || this.world.weather === 'blizzard' || currentBiome === 'snow') {
+      this.world.snowIntensity = Math.min(1, this.world.snowIntensity + dt * 0.4);
+    } else {
+      this.world.snowIntensity = Math.max(0, this.world.snowIntensity - dt * 0.4);
+    }
+
+    if (this.world.disasterType === 'earthquake' && Math.random() < dt * 0.4) {
+      this.triggerShake(7, 0.6);
+      soundEngine.playThunder();
     }
 
     if (this.world.weather === 'rain' || this.world.weather === 'thunderstorm') {
@@ -963,10 +1344,61 @@ export class GameEngine {
       this.world.lightningTimer -= dt;
     }
 
-    // 7. Update Enemies (AI)
+    // Synchronize rain intensity audio
+    soundEngine.setRainIntensity(this.world.rainIntensity);
+
+    // 7. Update Enemies (AI & Daytime Undead Burning)
+    const isDayTime = this.world.timeOfDay >= 6 * 60 && this.world.timeOfDay < 18 * 60;
     for (const enemy of this.world.enemies) {
       if (enemy.hp <= 0) continue;
       if (enemy.hitFlash > 0) enemy.hitFlash -= dt;
+
+      // Undead burning in direct sunlight unless under canopy shade
+      if (isDayTime && (enemy.type === 'zombie' || enemy.type === 'skeleton')) {
+        let inShade = false;
+        for (const res of this.world.resources) {
+          if (
+            res.hp > 0 &&
+            (res.type === 'tree' || 
+             res.type === 'oak_tree' || 
+             res.type === 'pine_tree' || 
+             res.type === 'birch_tree' || 
+             res.type === 'snowy_pine' || 
+             res.type === 'willow_tree')
+          ) {
+            if (Math.hypot(res.x - enemy.x, res.y - enemy.y) < 46) {
+              inShade = true;
+              break;
+            }
+          }
+        }
+        if (!inShade) {
+          enemy.onFire = true;
+          enemy.hp -= 9 * dt;
+          if (Math.random() < dt * 3) {
+            this.particles.push({
+              x: enemy.x + (Math.random() - 0.5) * 12,
+              y: enemy.y - 12 + (Math.random() - 0.5) * 8,
+              vx: (Math.random() - 0.5) * 15,
+              vy: -25 - Math.random() * 20,
+              color: Math.random() < 0.5 ? '#f97316' : '#facc15',
+              size: 3,
+              alpha: 1,
+              life: 0.5,
+              maxLife: 0.5,
+              type: 'ember',
+            });
+          }
+          if (enemy.hp <= 0) {
+            this.handleEnemyDeath(enemy);
+            continue;
+          }
+        } else {
+          enemy.onFire = false;
+        }
+      } else {
+        enemy.onFire = false;
+      }
 
       const distToPlayer = Math.hypot(this.player.x - enemy.x, this.player.y - enemy.y);
 
@@ -1099,7 +1531,9 @@ export class GameEngine {
   }
 
   private damagePlayer(amount: number) {
-    const defense = (this.player.equipment.armor?.item.defense ?? 0) + (this.player.equipment.helmet?.item.defense ?? 0);
+    const defense = (this.player.equipment.armor?.item.defense ?? 0) + 
+                    (this.player.equipment.helmet?.item.defense ?? 0) +
+                    (this.player.equipment.boots?.item.defense ?? 0);
     const finalDmg = calculateDamage(amount, defense);
 
     this.player.stats.hp = Math.max(0, this.player.stats.hp - finalDmg);
@@ -1111,8 +1545,85 @@ export class GameEngine {
     this.addFloatingText(this.player.x, this.player.y - 25, `-${finalDmg}`, '#ff2222');
 
     if (this.player.stats.hp <= 0) {
+      this.handlePlayerDeath();
       this.onGameOver?.();
     }
+    this.onStateChange?.();
+  }
+
+  public handlePlayerDeath() {
+    // Drop all inventory items at the death spot as loot
+    for (const slot of this.player.inventory) {
+      if (slot) {
+        this.spawnLoot(this.player.x, this.player.y, slot.item.id, slot.quantity);
+      }
+    }
+    // Drop all equipped gear
+    const eq = this.player.equipment;
+    for (const key of ['weapon', 'helmet', 'armor', 'boots', 'accessory'] as const) {
+      const slot = eq[key];
+      if (slot) {
+        this.spawnLoot(this.player.x, this.player.y, slot.item.id, slot.quantity);
+      }
+    }
+    // Clear player inventory and equipment
+    this.player.inventory = new Array(24).fill(null);
+    this.player.equipment = { weapon: null, helmet: null, armor: null, boots: null, accessory: null };
+    // Immediately persist empty state so reloading cannot restore items
+    saveGame(this.player, this.world, this.quests);
+  }
+
+  public respawnPlayer() {
+    // 1. Ensure inventory and equipment are completely wiped clean
+    this.player.inventory = new Array(24).fill(null);
+    this.player.equipment = { weapon: null, helmet: null, armor: null, boots: null, accessory: null };
+
+    // 2. If died inside a cave, restore overworld
+    if (this.player.isInsideCave && this.overworldWorld) {
+      this.world = this.overworldWorld;
+      this.player.isInsideCave = false;
+    }
+
+    let respawnX = 60 * TILE_SIZE;
+    let respawnY = 60 * TILE_SIZE;
+
+    // Check if player has an active bed that still exists
+    let foundBed = false;
+    if (this.player.spawnPoint) {
+      const bed = this.world.structures.find(s => s.type === 'bed' && Math.hypot(s.x - this.player.spawnPoint!.x, s.y - this.player.spawnPoint!.y) < 60);
+      if (bed) {
+        respawnX = bed.x;
+        respawnY = bed.y + 24;
+        foundBed = true;
+        this.addFloatingText(respawnX, respawnY - 30, 'Renasceu na sua Cama!', '#38bdf8');
+      }
+    }
+
+    if (!foundBed) {
+      const safeSpawn = findRandomSafeSpawn(this.world.tiles, this.world.width, this.world.height);
+      respawnX = safeSpawn.x;
+      respawnY = safeSpawn.y;
+      this.addFloatingText(respawnX, respawnY - 30, 'Renasceu no Ermo!', '#facc15');
+    }
+
+    this.player.x = respawnX;
+    this.player.y = respawnY;
+    this.cameraX = respawnX;
+    this.cameraY = respawnY;
+
+    // 3. Reset survival stats
+    this.player.stats.hp = this.player.stats.maxHp;
+    this.player.stats.hunger = 80;
+    this.player.stats.thirst = 80;
+    this.player.stats.energy = 100;
+    this.player.stats.bodyTemp = 36.5;
+    this.player.stats.sleep = 0;
+    this.player.stats.breath = 100;
+    this.player.isBoating = false;
+    this.player.isSwimming = false;
+    this.player.hitFlash = 0;
+
+    saveGame(this.player, this.world, this.quests);
     this.onStateChange?.();
   }
 
@@ -1122,16 +1633,48 @@ export class GameEngine {
     if (tileX < 0 || tileX >= this.world.width || tileY < 0 || tileY >= this.world.height) return true;
 
     const t = this.world.tiles[tileY * this.world.width + tileX];
-    if (isTileSolid(t)) return true;
+    const isWater = t === TILE_TYPES.WATER || t === TILE_TYPES.DEEP_WATER;
+    if (!isWater && isTileSolid(t)) return true;
 
     // Structure collision
     for (const s of this.world.structures) {
       if (s.type === 'wood_door' && s.isOpen) continue;
       if (s.type === 'farmland' || s.type === 'floor_torch') continue;
+      // Watercraft & Piers do not block the player
+      if (s.type === 'pier' || s.type === 'raft' || s.type === 'canoe' || s.type === 'wood_boat') continue;
       if (Math.hypot(s.x - x, s.y - y) < 22) {
         return true;
       }
     }
+
+    // Physical collision for Trees and Rocks
+    for (const res of this.world.resources) {
+      if (res.hp <= 0) continue;
+      if (
+        res.type === 'tree' || 
+        res.type === 'oak_tree' || 
+        res.type === 'pine_tree' || 
+        res.type === 'birch_tree' || 
+        res.type === 'snowy_pine' || 
+        res.type === 'willow_tree'
+      ) {
+        // Collide with rooted trunk base
+        if (Math.hypot(res.x - x, (res.y + 12) - y) < 14) {
+          return true;
+        }
+      } else if (
+        res.type === 'rock' || 
+        res.type === 'iron_ore' || 
+        res.type === 'copper_ore' || 
+        res.type === 'gold_ore' || 
+        res.type === 'diamond_ore'
+      ) {
+        if (Math.hypot(res.x - x, res.y - y) < 14) {
+          return true;
+        }
+      }
+    }
+
     return false;
   }
 
@@ -1193,21 +1736,25 @@ export class GameEngine {
       }
     }
 
-    // Animals
+    // Animals (Viewport culled)
     for (const animal of this.world.animals) {
-      renderList.push({
-        y: animal.y,
-        draw: () => spriteRenderer.drawAnimal(this.ctx, animal, this.gameTimeMs * 0.005),
-      });
+      if (animal.x >= this.cameraX - viewW && animal.x <= this.cameraX + viewW && animal.y >= this.cameraY - viewH && animal.y <= this.cameraY + viewH) {
+        renderList.push({
+          y: animal.y,
+          draw: () => spriteRenderer.drawAnimal(this.ctx, animal, this.gameTimeMs * 0.005),
+        });
+      }
     }
 
-    // Enemies
+    // Enemies (Viewport culled)
     for (const enemy of this.world.enemies) {
       if (enemy.hp <= 0) continue;
-      renderList.push({
-        y: enemy.y,
-        draw: () => spriteRenderer.drawEnemy(this.ctx, enemy, this.gameTimeMs * 0.005),
-      });
+      if (enemy.x >= this.cameraX - viewW && enemy.x <= this.cameraX + viewW && enemy.y >= this.cameraY - viewH && enemy.y <= this.cameraY + viewH) {
+        renderList.push({
+          y: enemy.y,
+          draw: () => spriteRenderer.drawEnemy(this.ctx, enemy, this.gameTimeMs * 0.005),
+        });
+      }
     }
 
     // Player
@@ -1224,7 +1771,10 @@ export class GameEngine {
         this.player.isAttacking,
         this.player.swingProgress,
         equippedWeaponId,
-        this.player.hitFlash
+        this.player.hitFlash,
+        this.player.isSwimming,
+        this.player.isBoating,
+        this.player.boatType
       ),
     });
 
@@ -1250,11 +1800,43 @@ export class GameEngine {
       this.ctx.fill();
     }
 
-    // 5. Ghost Building Placement Preview
+    // 5. Ghost Building Placement Preview (Clamped to player vicinity)
     if (this.isBuildingMode && this.selectedBuildingStructureId) {
-      const tileX = Math.floor(this.mouseWorldX / TILE_SIZE);
-      const tileY = Math.floor(this.mouseWorldY / TILE_SIZE);
-      const canPlace = !this.checkPlayerCollision(tileX * TILE_SIZE + TILE_SIZE / 2, tileY * TILE_SIZE + TILE_SIZE / 2);
+      const MAX_BUILD_REACH = 96;
+      let targetX = this.mouseWorldX;
+      let targetY = this.mouseWorldY;
+      const distFromPlayer = Math.hypot(targetX - this.player.x, targetY - this.player.y);
+
+      if (distFromPlayer > MAX_BUILD_REACH || (targetX === 0 && targetY === 0)) {
+        let forwardX = 0;
+        let forwardY = 0;
+        if (this.player.facing === 'down') forwardY = 48;
+        else if (this.player.facing === 'up') forwardY = -48;
+        else if (this.player.facing === 'left') forwardX = -48;
+        else if (this.player.facing === 'right') forwardX = 48;
+
+        if (distFromPlayer > MAX_BUILD_REACH && (targetX !== 0 || targetY !== 0)) {
+          const angle = Math.atan2(targetY - this.player.y, targetX - this.player.x);
+          targetX = this.player.x + Math.cos(angle) * MAX_BUILD_REACH;
+          targetY = this.player.y + Math.sin(angle) * MAX_BUILD_REACH;
+        } else {
+          targetX = this.player.x + forwardX;
+          targetY = this.player.y + forwardY;
+        }
+      }
+
+      const tileX = Math.floor(targetX / TILE_SIZE);
+      const tileY = Math.floor(targetY / TILE_SIZE);
+      const isWatercraft = this.selectedBuildingStructureId === 'raft' || 
+                           this.selectedBuildingStructureId === 'canoe' || 
+                           this.selectedBuildingStructureId === 'wood_boat' || 
+                           this.selectedBuildingStructureId === 'pier';
+      const tileType = (tileX >= 0 && tileX < this.world.width && tileY >= 0 && tileY < this.world.height)
+        ? this.world.tiles[tileY * this.world.width + tileX]
+        : TILE_TYPES.GRASS;
+      const isWaterTile = tileType === TILE_TYPES.WATER || tileType === TILE_TYPES.DEEP_WATER;
+      const occupied = this.world.structures.some(s => s.tileX === tileX && s.tileY === tileY);
+      const canPlace = (isWatercraft ? isWaterTile : !isWaterTile) && !occupied && tileX >= 2 && tileX < this.world.width - 2 && tileY >= 2 && tileY < this.world.height - 2;
 
       this.ctx.fillStyle = canPlace ? 'rgba(50, 255, 50, 0.35)' : 'rgba(255, 50, 50, 0.35)';
       this.ctx.fillRect(tileX * TILE_SIZE, tileY * TILE_SIZE, TILE_SIZE, TILE_SIZE);
@@ -1366,6 +1948,7 @@ export class GameEngine {
   }
 
   private renderWeather(viewW: number, viewH: number) {
+    // 1. Rain Streaks
     if (this.world.rainIntensity > 0) {
       this.ctx.strokeStyle = `rgba(180, 210, 255, ${0.45 * this.world.rainIntensity})`;
       this.ctx.lineWidth = 1.5;
@@ -1380,10 +1963,67 @@ export class GameEngine {
       this.ctx.stroke();
     }
 
-    // Lightning Flash
+    // 2. Snowflakes
+    if (this.world.snowIntensity > 0) {
+      this.ctx.fillStyle = `rgba(255, 255, 255, ${0.8 * this.world.snowIntensity})`;
+      const flakeCount = Math.floor(90 * this.world.snowIntensity);
+      for (let i = 0; i < flakeCount; i++) {
+        const fx = Math.abs((Math.sin(i * 77 + this.gameTimeMs * 0.001) * 0.5 + 0.5) * viewW + Math.sin(this.gameTimeMs * 0.002 + i) * 20) % viewW;
+        const fy = Math.abs((i * 29 + this.gameTimeMs * 0.06) % viewH);
+        const sz = (i % 3) + 2;
+        this.ctx.fillRect(fx, fy, sz, sz);
+      }
+    }
+
+    // 3. Heatwave Amber Shimmer
+    if (this.world.weather === 'heatwave') {
+      const shimmer = Math.sin(this.gameTimeMs * 0.004) * 0.03;
+      this.ctx.fillStyle = `rgba(249, 115, 22, ${0.14 + shimmer})`;
+      this.ctx.fillRect(0, 0, viewW, viewH);
+    }
+
+    // 4. Lightning Flash
     if (this.world.lightningTimer > 0) {
       this.ctx.fillStyle = `rgba(255, 255, 255, ${Math.min(0.8, this.world.lightningTimer * 5)})`;
       this.ctx.fillRect(0, 0, viewW, viewH);
+    }
+
+    // 5. Disaster Alert Banner Overhead
+    if (this.world.disasterWarning) {
+      this.ctx.save();
+      this.ctx.fillStyle = 'rgba(20, 20, 30, 0.85)';
+      this.ctx.fillRect(viewW / 2 - 160, 10, 320, 26);
+      this.ctx.strokeStyle = '#f59e0b';
+      this.ctx.lineWidth = 1.5;
+      this.ctx.strokeRect(viewW / 2 - 160, 10, 320, 26);
+      this.ctx.fillStyle = '#fbbf24';
+      this.ctx.font = 'bold 11px monospace';
+      this.ctx.textAlign = 'center';
+      this.ctx.fillText(`⚠️ ${this.world.disasterWarning}`, viewW / 2, 27);
+      this.ctx.restore();
+    }
+
+    // 6. Atmospheric Neblina (Fog & Mist) in Lake/Swamp, Ancient Ruins, and Morning Dawn
+    const pTileX = Math.floor(this.player.x / TILE_SIZE);
+    const pTileY = Math.floor(this.player.y / TILE_SIZE);
+    const distToLake = Math.hypot(pTileX - 60, pTileY - 135);
+    const isSwampOrLake = distToLake < 46;
+    const isRuins = pTileX < 45 && pTileY >= 45 && pTileY < 95;
+    const isMorningFog = this.world.timeOfDay >= 5 * 60 && this.world.timeOfDay <= 8.5 * 60;
+
+    if (!this.player.isInsideCave && (isSwampOrLake || isRuins || isMorningFog)) {
+      const fogAlpha = isSwampOrLake ? 0.28 : isMorningFog ? 0.18 : 0.22;
+      this.ctx.save();
+      for (let w = 0; w < 3; w++) {
+        const drift = (this.gameTimeMs * 0.015 * (w % 2 === 0 ? 1 : -0.7) + w * 260) % (viewW + 200) - 100;
+        const fy = (viewH * 0.3 * w) + Math.sin(this.gameTimeMs * 0.001 + w) * 20;
+        const grad = this.ctx.createRadialGradient(drift, fy, 40, drift, fy, 220);
+        grad.addColorStop(0, `rgba(226, 232, 240, ${fogAlpha})`);
+        grad.addColorStop(1, 'rgba(226, 232, 240, 0)');
+        this.ctx.fillStyle = grad;
+        this.ctx.fillRect(0, 0, viewW, viewH);
+      }
+      this.ctx.restore();
     }
   }
 }

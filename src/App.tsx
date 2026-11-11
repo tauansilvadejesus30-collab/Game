@@ -19,7 +19,7 @@ import { PauseModal } from './components/PauseModal';
 import { GameOverModal } from './components/GameOverModal';
 import { SettingsModal } from './components/SettingsModal';
 import { GuideModal } from './components/GuideModal';
-import { Recipe, StructureEntity } from './game/types';
+import { Recipe, StructureEntity, InventorySlot } from './game/types';
 import { ITEMS } from './game/constants';
 import { saveGame, clearSavedGame } from './game/saveManager';
 import { soundEngine } from './game/audio';
@@ -179,14 +179,10 @@ export default function App() {
 
   const handleRespawn = () => {
     if (engineRef.current) {
-      engineRef.current.player.stats.hp = engineRef.current.player.stats.maxHp;
-      engineRef.current.player.stats.hunger = 80;
-      engineRef.current.player.stats.thirst = 80;
-      engineRef.current.player.stats.energy = 100;
-      engineRef.current.player.x = 60 * 48;
-      engineRef.current.player.y = 61 * 48;
+      engineRef.current.respawnPlayer();
       setGameState('playing');
       engineRef.current.start();
+      forceUpdate();
     }
   };
 
@@ -225,10 +221,76 @@ export default function App() {
         const old = engineRef.current.player.equipment.armor;
         engineRef.current.player.equipment.armor = slot;
         engineRef.current.player.inventory[slotIndex] = old;
+      } else if (slot.item.id.includes('boots')) {
+        const old = engineRef.current.player.equipment.boots;
+        engineRef.current.player.equipment.boots = slot;
+        engineRef.current.player.inventory[slotIndex] = old;
       }
       soundEngine.playBuild();
       forceUpdate();
     }
+  };
+
+  const handleSwapSlots = (fromIndex: number, toIndex: number) => {
+    if (!engineRef.current) return;
+    const inv = engineRef.current.player.inventory;
+    const temp = inv[fromIndex];
+    inv[fromIndex] = inv[toIndex];
+    inv[toIndex] = temp;
+    soundEngine.playUiClick();
+    forceUpdate();
+  };
+
+  const handleOrganizeInventory = () => {
+    if (!engineRef.current) return;
+    const inv = engineRef.current.player.inventory;
+
+    // 1. Merge identical stackable items
+    for (let i = 0; i < inv.length; i++) {
+      const slot = inv[i];
+      if (!slot || !slot.item.stackable || slot.quantity >= slot.item.maxStack) continue;
+      for (let j = i + 1; j < inv.length; j++) {
+        const other = inv[j];
+        if (other && other.item.id === slot.item.id) {
+          const space = slot.item.maxStack - slot.quantity;
+          const transfer = Math.min(space, other.quantity);
+          slot.quantity += transfer;
+          other.quantity -= transfer;
+          if (other.quantity <= 0) {
+            inv[j] = null;
+          }
+          if (slot.quantity >= slot.item.maxStack) break;
+        }
+      }
+    }
+
+    // 2. Sort by category priority
+    const categoryPriority: Record<string, number> = {
+      tool: 1,
+      weapon: 2,
+      equipment: 3,
+      food: 4,
+      survival: 5,
+      building: 6,
+      resource: 7,
+      seed: 8,
+    };
+
+    const items = inv.filter((s): s is InventorySlot => s !== null);
+    items.sort((a, b) => {
+      const catA = categoryPriority[a.item.category] ?? 99;
+      const catB = categoryPriority[b.item.category] ?? 99;
+      if (catA !== catB) return catA - catB;
+      return a.item.name.localeCompare(b.item.name);
+    });
+
+    const newInv = new Array(24).fill(null);
+    for (let i = 0; i < items.length; i++) {
+      newInv[i] = items[i];
+    }
+    engineRef.current.player.inventory = newInv;
+    soundEngine.playLevelUp();
+    forceUpdate();
   };
 
   const handleDropItem = (slotIndex: number) => {
@@ -396,12 +458,15 @@ export default function App() {
           onEquipItem={handleEquipItem}
           onDropItem={handleDropItem}
           onSplitStack={handleSplitStack}
+          onSwapSlots={handleSwapSlots}
+          onOrganize={handleOrganizeInventory}
         />
       )}
 
       {activeModal === 'crafting' && engine && (
         <CraftingModal
           inventory={engine.player.inventory}
+          nearbyStations={engine.getNearbyStations()}
           onClose={() => setActiveModal(null)}
           onCraft={handleCraft}
         />

@@ -26,7 +26,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
         </p>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-2 gap-2 w-full bg-[#10121a] p-3 rounded-xl border border-[#2b2e42] mb-6">
+        <div className="grid grid-cols-2 gap-2 w-full bg-[#10121a] p-3 rounded-xl border border-[#2b2e42] mb-3">
           <div className="flex flex-col">
             <span className="text-[10px] text-gray-400">Dias Sobrevividos</span>
             <span className="font-pixel text-base text-yellow-400">{dayCount}</span>
@@ -35,6 +35,10 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
             <span className="text-[10px] text-gray-400">Nível do Sobrevivente</span>
             <span className="font-pixel text-base text-purple-400">Lv. {level}</span>
           </div>
+        </div>
+
+        <div className="w-full bg-red-950/40 border border-red-800/60 p-2.5 rounded-xl mb-5 text-[11px] text-red-200">
+          ⚠️ <strong>Você perdeu todos os seus itens!</strong> Eles caíram no local onde você foi derrotado.
         </div>
 
         <button

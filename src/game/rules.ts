@@ -29,13 +29,27 @@ export function calculateDamage(
 export function calculateTargetTemperature(params: {
   isNight: boolean;
   isRaining: boolean;
-  biome: 'forest' | 'beach' | 'mountain' | 'desert' | 'ruins';
+  biome: 'forest' | 'beach' | 'mountain' | 'desert' | 'ruins' | 'snow';
   nearCampfire: boolean;
   nearTorch: boolean;
   insideCabin: boolean;
   equippedArmorDefense: number;
+  isSnowing?: boolean;
+  isBlizzard?: boolean;
+  isHeatwave?: boolean;
 }): number {
-  const { isNight, isRaining, biome, nearCampfire, nearTorch, insideCabin, equippedArmorDefense } = params;
+  const { 
+    isNight, 
+    isRaining, 
+    biome, 
+    nearCampfire, 
+    nearTorch, 
+    insideCabin, 
+    equippedArmorDefense,
+    isSnowing,
+    isBlizzard,
+    isHeatwave,
+  } = params;
 
   let ambient = 36.5; // Normal body temperature
 
@@ -44,6 +58,8 @@ export function calculateTargetTemperature(params: {
     ambient = isNight ? 28 : 41;
   } else if (biome === 'mountain') {
     ambient = isNight ? 22 : 31;
+  } else if (biome === 'snow') {
+    ambient = isNight ? 14 : 22;
   } else if (biome === 'forest') {
     ambient = isNight ? 30 : 36.5;
   } else if (biome === 'beach') {
@@ -53,6 +69,15 @@ export function calculateTargetTemperature(params: {
   // Weather effects
   if (isRaining) {
     ambient -= 4.0;
+  }
+  if (isSnowing) {
+    ambient -= 6.0;
+  }
+  if (isBlizzard) {
+    ambient -= 14.0;
+  }
+  if (isHeatwave) {
+    ambient += 10.0;
   }
 
   // Shelter protection
@@ -80,16 +105,32 @@ export function calculateTargetTemperature(params: {
  * Checks if a tile is blocking movement
  */
 export function isTileSolid(tileType: number): boolean {
-  return tileType === TILE_TYPES.WATER || tileType === TILE_TYPES.DEEP_WATER;
+  return tileType === TILE_TYPES.WATER || tileType === TILE_TYPES.DEEP_WATER || tileType === TILE_TYPES.CAVE_WALL;
 }
 
 /**
- * Checks if inventory contains required recipe ingredients
+ * Checks if the currently equipped item is a hammer eligible to dismantle placed structures
+ */
+export function canDismantleWithTool(equippedItem?: { toolType?: string; id?: string } | null): boolean {
+  if (!equippedItem) return false;
+  return equippedItem.toolType === 'hammer' || (typeof equippedItem.id === 'string' && equippedItem.id.includes('hammer'));
+}
+
+
+/**
+ * Checks if inventory contains required recipe ingredients and nearby station if required
  */
 export function canCraftRecipe(
   inventory: (InventorySlot | null)[], 
-  recipe: Recipe
+  recipe: Recipe,
+  nearbyStations?: string[]
 ): boolean {
+  if (recipe.requiresStation) {
+    if (!nearbyStations || !nearbyStations.includes(recipe.requiresStation)) {
+      return false;
+    }
+  }
+
   for (const req of recipe.ingredients) {
     let availableCount = 0;
     for (const slot of inventory) {
@@ -102,6 +143,55 @@ export function canCraftRecipe(
     }
   }
   return true;
+}
+
+/**
+ * Calculates effective movement speed based on terrain and boating/swimming state
+ */
+export function calculateMovementSpeed(baseSpeed: number, isSwimming: boolean, isBoating: boolean, isSprinting: boolean): number {
+  let speed = baseSpeed;
+  if (isBoating) {
+    speed *= 1.55; // Fast navigation on water
+  } else if (isSwimming) {
+    speed *= 0.65; // Water resistance drag
+  } else if (isSprinting) {
+    speed *= 1.45; // Sprint on land
+  }
+  return speed;
+}
+
+/**
+ * Updates swimming breath and drowning penalties
+ */
+export function updateSwimmingBreath(
+  stats: PlayerStats,
+  dt: number,
+  isSwimming: boolean,
+  isBoating: boolean
+): { breath: number; drowningDamage: number } {
+  let breath = stats.breath ?? 100;
+  const maxBreath = stats.maxBreath ?? 100;
+  let drowningDamage = 0;
+
+  if (isBoating) {
+    // Restored while safely inside boat
+    breath = Math.min(maxBreath, breath + 35 * dt);
+  } else if (isSwimming) {
+    // Breath consumed while swimming
+    breath = Math.max(0, breath - 8.5 * dt);
+    if (breath <= 0) {
+      // Drowning damage
+      drowningDamage = 6.0 * dt;
+    }
+  } else {
+    // Rapidly recover on dry land
+    breath = Math.min(maxBreath, breath + 30 * dt);
+  }
+
+  return {
+    breath: Math.round(breath * 10) / 10,
+    drowningDamage: Math.round(drowningDamage * 10) / 10,
+  };
 }
 
 /**

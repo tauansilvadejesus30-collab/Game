@@ -71,6 +71,7 @@ export const HUD: React.FC<HUDProps> = ({
   const [joystickCurrent, setJoystickCurrent] = useState<{ x: number; y: number } | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(!!document.fullscreenElement);
   const [isQuestCollapsed, setIsQuestCollapsed] = useState(false);
+  const joystickTouchIdRef = React.useRef<number | null>(null);
 
   useEffect(() => {
     const handleFsChange = () => setIsFullscreen(!!document.fullscreenElement);
@@ -105,39 +106,56 @@ export const HUD: React.FC<HUDProps> = ({
       ? Cloud 
       : Sun;
 
-  // Touch joystick handlers
+  // True Multi-Touch Joystick Handlers (Tracks touch.identifier)
   const handleJoystickTouchStart = (e: React.TouchEvent) => {
-    const touch = e.touches[0];
+    e.preventDefault();
+    if (joystickTouchIdRef.current !== null) return;
+    const touch = e.changedTouches[0];
+    if (!touch) return;
+    joystickTouchIdRef.current = touch.identifier;
     setJoystickStart({ x: touch.clientX, y: touch.clientY });
     setJoystickCurrent({ x: touch.clientX, y: touch.clientY });
     setTouchActive(true);
   };
 
   const handleJoystickTouchMove = (e: React.TouchEvent) => {
-    if (!joystickStart) return;
-    const touch = e.touches[0];
-    const dx = touch.clientX - joystickStart.x;
-    const dy = touch.clientY - joystickStart.y;
-    const dist = Math.hypot(dx, dy);
-    const maxRadius = 38;
-    const clampedDist = Math.min(dist, maxRadius);
-    const angle = Math.atan2(dy, dx);
+    e.preventDefault();
+    if (joystickTouchIdRef.current === null || !joystickStart) return;
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      const touch = e.changedTouches[i];
+      if (touch.identifier === joystickTouchIdRef.current) {
+        const dx = touch.clientX - joystickStart.x;
+        const dy = touch.clientY - joystickStart.y;
+        const dist = Math.hypot(dx, dy);
+        const maxRadius = 38;
+        const clampedDist = Math.min(dist, maxRadius);
+        const angle = Math.atan2(dy, dx);
 
-    const nx = Math.cos(angle) * (clampedDist / maxRadius);
-    const ny = Math.sin(angle) * (clampedDist / maxRadius);
+        const nx = Math.cos(angle) * (clampedDist / maxRadius);
+        const ny = Math.sin(angle) * (clampedDist / maxRadius);
 
-    setJoystickCurrent({
-      x: joystickStart.x + Math.cos(angle) * clampedDist,
-      y: joystickStart.y + Math.sin(angle) * clampedDist,
-    });
-    onJoystickMove({ x: nx, y: ny });
+        setJoystickCurrent({
+          x: joystickStart.x + Math.cos(angle) * clampedDist,
+          y: joystickStart.y + Math.sin(angle) * clampedDist,
+        });
+        onJoystickMove({ x: nx, y: ny });
+        break;
+      }
+    }
   };
 
-  const handleJoystickTouchEnd = () => {
-    setJoystickStart(null);
-    setJoystickCurrent(null);
-    setTouchActive(false);
-    onJoystickMove({ x: 0, y: 0 });
+  const handleJoystickTouchEnd = (e: React.TouchEvent) => {
+    e.preventDefault();
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      if (e.changedTouches[i].identifier === joystickTouchIdRef.current) {
+        joystickTouchIdRef.current = null;
+        setJoystickStart(null);
+        setJoystickCurrent(null);
+        setTouchActive(false);
+        onJoystickMove({ x: 0, y: 0 });
+        break;
+      }
+    }
   };
 
   return (
@@ -253,6 +271,22 @@ export const HUD: React.FC<HUDProps> = ({
               {stats.bodyTemp.toFixed(1)}°
             </span>
           </div>
+
+          {/* 6. Breath / Fôlego Meter (Displays when swimming or breath < 100) */}
+          {(stats.breath ?? 100) < 100 && (
+            <div className="flex items-center gap-1 bg-[#0a1b2a]/95 px-1.5 py-0.2 rounded border border-[#0284c7] shadow animate-pulse">
+              <span className="text-[10px] leading-none shrink-0">🫧</span>
+              <div className="w-full bg-[#082f49] h-2 rounded-sm overflow-hidden relative border border-[#0369a1]">
+                <div 
+                  className="h-full bg-gradient-to-r from-sky-500 to-cyan-300 transition-all duration-150"
+                  style={{ width: `${Math.max(0, ((stats.breath ?? 100) / (stats.maxBreath ?? 100)) * 100)}%` }}
+                />
+              </div>
+              <span className="text-[9px] text-cyan-200 tabular-nums w-10 text-right shrink-0">
+                {Math.round(stats.breath ?? 100)}%
+              </span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -390,7 +424,7 @@ export const HUD: React.FC<HUDProps> = ({
       {/* ========================================================= */}
       {/* 5. BOTTOM-LEFT: Virtual Joystick (Elevated & 100% On-Screen) */}
       {/* ========================================================= */}
-      <div className="absolute bottom-2.5 sm:bottom-4 left-3 sm:left-4 pl-[env(safe-area-inset-left)] pb-[env(safe-area-inset-bottom)] pointer-events-auto">
+      <div className="absolute bottom-7 sm:bottom-9 left-4 sm:left-7 pl-[env(safe-area-inset-left)] pb-[env(safe-area-inset-bottom)] pointer-events-auto">
         <div 
           className="relative w-24 h-24 sm:w-28 sm:h-28 bg-black/55 backdrop-blur-sm border-2 border-white/30 rounded-full flex items-center justify-center touch-none shadow-[0_4px_24px_rgba(0,0,0,0.7)] select-none"
           onTouchStart={handleJoystickTouchStart}
@@ -473,10 +507,15 @@ export const HUD: React.FC<HUDProps> = ({
       {/* ========================================================= */}
       {/* 7. BOTTOM-RIGHT: Attack & Sprint Buttons (Guaranteed Visible) */}
       {/* ========================================================= */}
-      <div className="absolute bottom-2.5 sm:bottom-4 right-3 sm:right-4 pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pointer-events-auto flex items-center gap-2 sm:gap-2.5">
+      <div className="absolute bottom-7 sm:bottom-9 right-4 sm:right-7 pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pointer-events-auto flex items-center gap-2 sm:gap-2.5">
         {/* Sprint / Roll Toggle Button */}
         <button
           onClick={() => onToggleSprint(!isSprinting)}
+          onTouchStart={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onToggleSprint(!isSprinting);
+          }}
           className={`w-11 h-11 sm:w-13 sm:h-13 rounded-full border-2 flex flex-col items-center justify-center shadow-xl cursor-pointer active:scale-95 transition-all ${
             isSprinting 
               ? 'bg-amber-600 border-yellow-300 shadow-yellow-500/40' 
@@ -491,6 +530,11 @@ export const HUD: React.FC<HUDProps> = ({
         {/* Attack / Action Button */}
         <button
           onClick={onAttack}
+          onTouchStart={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onAttack();
+          }}
           className="w-13 h-13 sm:w-15 sm:h-15 bg-gradient-to-tr from-red-700 to-rose-500 hover:from-red-600 hover:to-rose-400 active:scale-90 border-2 border-yellow-400 rounded-full flex flex-col items-center justify-center shadow-[0_0_16px_rgba(239,68,68,0.6)] cursor-pointer"
           title="Atacar / Interagir (Espaço / Toque)"
         >
