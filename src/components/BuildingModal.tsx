@@ -1,8 +1,8 @@
 import React from 'react';
 import { InventorySlot } from '../game/types';
-import { ITEMS } from '../game/constants';
-import { X, Sparkles, Hammer } from 'lucide-react';
+import { X, Sparkles } from 'lucide-react';
 import { soundEngine } from '../game/audio';
+import { ItemIcon } from './ItemIcon';
 
 interface BuildingModalProps {
   inventory: (InventorySlot | null)[];
@@ -42,20 +42,20 @@ export const BuildingModal: React.FC<BuildingModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-2 sm:p-4">
-      <div className="bg-[#171926] border-2 border-[#4b4e6d] rounded-2xl w-full max-w-2xl h-[92vh] max-h-[460px] flex flex-col shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-2 sm:p-4 select-none touch-none">
+      <div className="bg-neutral-950 border-2 border-neutral-700/80 rounded-2xl w-full max-w-2xl h-[92vh] max-h-[460px] flex flex-col shadow-2xl overflow-hidden font-sans">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-2 sm:py-2.5 bg-[#12141f] border-b border-[#2b2e42] shrink-0">
+        <div className="flex items-center justify-between px-4 py-2 sm:py-2.5 bg-black border-b border-neutral-800 shrink-0">
           <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400" />
-            <h2 className="font-pixel text-xs sm:text-sm text-emerald-400">CONSTRUÇÃO DE BASE</h2>
+            <Sparkles className="w-4 h-4 text-emerald-400" />
+            <h2 className="font-pixel text-xs sm:text-sm text-white">CONSTRUÇÃO DE BASE</h2>
           </div>
           <button
             onClick={() => {
               soundEngine.playUiClick();
               onClose();
             }}
-            className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#25283b] hover:bg-rose-900/60 text-gray-300 hover:text-white flex items-center justify-center cursor-pointer transition-colors"
+            className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-neutral-900 hover:bg-red-950 text-neutral-400 hover:text-white flex items-center justify-center border border-neutral-800 cursor-pointer transition-colors active:scale-95"
           >
             <X className="w-4 h-4" />
           </button>
@@ -63,11 +63,11 @@ export const BuildingModal: React.FC<BuildingModalProps> = ({
 
         {/* Content */}
         <div className="p-3 sm:p-4 overflow-y-auto flex flex-col gap-2 flex-1 min-h-0">
-          <p className="text-xs text-gray-300">
-            Selecione uma estrutura para posicionar no mapa. No mapa, clique para construir ou use o botão direito para cancelar.
+          <p className="text-xs text-neutral-300">
+            Selecione uma estrutura para posicionar no mapa. No mapa, toque onde deseja construir.
           </p>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 mt-1">
             {buildables.map(b => {
               const qty = getInventoryQuantity(b.itemId);
               const hasItem = qty > 0;
@@ -80,24 +80,24 @@ export const BuildingModal: React.FC<BuildingModalProps> = ({
                     soundEngine.playUiClick();
                     onSelectStructure(b.id);
                   }}
-                  className={`flex items-start gap-3 p-3 rounded-xl border text-left transition-all ${
+                  className={`flex items-start gap-2.5 p-2.5 rounded-xl border text-left transition-all ${
                     hasItem 
-                      ? 'border-[#3b3f5c] bg-[#12141f] hover:border-emerald-400 hover:bg-[#1c2233] cursor-pointer' 
-                      : 'border-[#26283b] bg-[#10121a] opacity-50 cursor-not-allowed'
+                      ? 'border-neutral-700 bg-neutral-900/90 hover:border-emerald-400 hover:bg-neutral-800 cursor-pointer active:scale-95' 
+                      : 'border-neutral-900 bg-black/40 opacity-50 cursor-not-allowed'
                   }`}
                 >
-                  <div className="w-12 h-12 rounded-xl bg-[#1a1c29] border border-[#3b3e59] flex items-center justify-center text-2xl shrink-0">
-                    {b.icon}
+                  <div className="w-10 h-10 rounded-xl bg-black border border-neutral-700 flex items-center justify-center shrink-0">
+                    <ItemIcon id={b.itemId} fallbackIcon={b.icon} size="md" />
                   </div>
 
-                  <div className="flex flex-col">
+                  <div className="flex flex-col min-w-0 flex-1">
                     <div className="flex items-center justify-between">
-                      <span className="font-bold text-xs text-gray-200">{b.name}</span>
-                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${hasItem ? 'bg-emerald-950 text-emerald-400' : 'bg-rose-950 text-rose-400'}`}>
+                      <span className="font-bold text-xs text-white truncate">{b.name}</span>
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded font-mono ${hasItem ? 'bg-emerald-950 text-emerald-400' : 'bg-red-950 text-red-400'}`}>
                         Qtd: {qty}
                       </span>
                     </div>
-                    <p className="text-[10px] text-gray-400 mt-1 line-clamp-2">
+                    <p className="text-[10px] text-neutral-400 mt-0.5 line-clamp-2">
                       {b.desc}
                     </p>
                   </div>

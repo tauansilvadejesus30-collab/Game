@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { InventorySlot, StructureEntity } from '../game/types';
-import { X, ArrowDownUp, Package } from 'lucide-react';
+import { X, Package, ArrowDownUp } from 'lucide-react';
 import { soundEngine } from '../game/audio';
+import { ItemIcon } from './ItemIcon';
 
 interface ChestModalProps {
   chest: StructureEntity;
@@ -62,43 +63,43 @@ export const ChestModal: React.FC<ChestModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-3">
-      <div className="bg-[#171926] border-2 border-[#4b4e6d] rounded-2xl w-full max-w-xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-3 select-none touch-none">
+      <div className="bg-neutral-950 border-2 border-neutral-700/80 rounded-2xl w-full max-w-xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden font-sans">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3.5 bg-[#12141f] border-b border-[#2b2e42]">
+        <div className="flex items-center justify-between px-4 py-3 bg-black border-b border-neutral-800">
           <div className="flex items-center gap-2">
             <Package className="w-5 h-5 text-amber-400" />
-            <h2 className="font-pixel text-sm md:text-base text-amber-400">BAÚ DE MADEIRA</h2>
+            <h2 className="font-pixel text-xs sm:text-sm text-white">BAÚ DE ARMAZENAMENTO</h2>
           </div>
           <button
             onClick={() => {
               soundEngine.playUiClick();
               onClose();
             }}
-            className="w-8 h-8 rounded-lg bg-[#25283b] hover:bg-rose-900/60 text-gray-300 hover:text-white flex items-center justify-center cursor-pointer transition-colors"
+            className="w-8 h-8 rounded-lg bg-neutral-900 hover:bg-red-950 text-neutral-400 hover:text-white flex items-center justify-center border border-neutral-800 cursor-pointer transition-colors active:scale-95"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="p-4 md:p-6 overflow-y-auto flex flex-col gap-4">
+        <div className="p-3 sm:p-5 overflow-y-auto flex flex-col gap-3">
           {/* Top: Chest Slots (16) */}
-          <div className="flex flex-col gap-2">
-            <span className="text-xs font-bold text-amber-300">COMPARTIMENTO DO BAÚ (16 Slots)</span>
-            <div className="grid grid-cols-8 gap-1.5 bg-[#10121a] p-3 rounded-xl border border-[#26283b]">
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[11px] font-bold text-neutral-300 font-mono">COMPARTIMENTO DO BAÚ (16 Slots)</span>
+            <div className="grid grid-cols-8 gap-1.5 bg-black/60 p-2.5 rounded-xl border border-neutral-800">
               {chestSlots.map((slot, idx) => (
                 <button
                   key={idx}
                   onClick={() => transferChestToPlayer(idx)}
-                  className="relative aspect-square rounded-lg border border-[#3b3f5c] bg-[#1a1c29] hover:border-yellow-400 flex items-center justify-center cursor-pointer transition-all"
-                  title={slot ? `${slot.item.name} (Clique para pegar)` : 'Vazio'}
+                  className="relative aspect-square rounded-lg border border-neutral-700 bg-neutral-900/90 hover:border-yellow-400 flex items-center justify-center cursor-pointer transition-all active:scale-95"
+                  title={slot ? `${slot.item.name} (Toque para pegar)` : 'Vazio'}
                 >
                   {slot ? (
                     <>
-                      <span className="text-xl select-none">{slot.item.icon}</span>
+                      <ItemIcon id={slot.item.id} fallbackIcon={slot.item.icon} size="sm" />
                       {slot.quantity > 1 && (
-                        <span className="absolute bottom-0.5 right-1 text-[10px] font-bold text-white tabular-nums drop-shadow">
+                        <span className="absolute bottom-0 right-1 text-[9px] font-bold text-white tabular-nums drop-shadow">
                           {slot.quantity}
                         </span>
                       )}
@@ -109,27 +110,28 @@ export const ChestModal: React.FC<ChestModalProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center justify-center text-xs text-gray-500 font-bold gap-2">
-            <ArrowDownUp className="w-4 h-4 text-gray-400" />
-            <span>Clique nos itens para transferir entre baú e mochila</span>
+          {/* Transfer Indicator */}
+          <div className="flex items-center justify-center gap-2 text-[10px] text-neutral-400 py-1">
+            <ArrowDownUp className="w-3.5 h-3.5 text-neutral-500" />
+            <span>Toque no item para transferir entre baú e mochila</span>
           </div>
 
           {/* Bottom: Player Inventory (24) */}
-          <div className="flex flex-col gap-2">
-            <span className="text-xs font-bold text-gray-300">SUA MOCHILA</span>
-            <div className="grid grid-cols-8 gap-1.5 bg-[#10121a] p-3 rounded-xl border border-[#26283b]">
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[11px] font-bold text-neutral-300 font-mono">SUA MOCHILA (24 Slots)</span>
+            <div className="grid grid-cols-8 gap-1.5 bg-black/60 p-2.5 rounded-xl border border-neutral-800">
               {playerSlots.map((slot, idx) => (
                 <button
                   key={idx}
                   onClick={() => transferPlayerToChest(idx)}
-                  className="relative aspect-square rounded-lg border border-[#26283b] bg-[#141622] hover:border-yellow-400 flex items-center justify-center cursor-pointer transition-all"
-                  title={slot ? `${slot.item.name} (Clique para guardar)` : 'Vazio'}
+                  className="relative aspect-square rounded-lg border border-neutral-800 bg-neutral-950 hover:border-yellow-400 flex items-center justify-center cursor-pointer transition-all active:scale-95"
+                  title={slot ? `${slot.item.name} (Toque para guardar)` : 'Vazio'}
                 >
                   {slot ? (
                     <>
-                      <span className="text-xl select-none">{slot.item.icon}</span>
+                      <ItemIcon id={slot.item.id} fallbackIcon={slot.item.icon} size="sm" />
                       {slot.quantity > 1 && (
-                        <span className="absolute bottom-0.5 right-1 text-[10px] font-bold text-white tabular-nums drop-shadow">
+                        <span className="absolute bottom-0 right-1 text-[9px] font-bold text-white tabular-nums drop-shadow">
                           {slot.quantity}
                         </span>
                       )}

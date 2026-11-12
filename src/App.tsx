@@ -84,6 +84,15 @@ export default function App() {
     }
   }, []);
 
+  // Smooth, optimized 120ms interval for HUD survival stats and proximity updates while playing
+  useEffect(() => {
+    if (gameState !== 'playing') return;
+    const interval = setInterval(() => {
+      forceUpdate();
+    }, 120);
+    return () => clearInterval(interval);
+  }, [gameState, forceUpdate]);
+
   // Initialize Game Engine on Canvas mount
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -148,7 +157,11 @@ export default function App() {
       const engine = new GameEngine(canvasRef.current);
       engineRef.current = engine;
     }
+    if (isNew && engineRef.current) {
+      engineRef.current.resetWorld(true);
+    }
     engineRef.current?.start();
+    forceUpdate();
   };
 
   const handleResume = () => {
@@ -425,37 +438,61 @@ export default function App() {
       )}
 
       {/* Active Playing HUD */}
-      {gameState === 'playing' && engine && (
-        <HUD
-          stats={engine.player.stats}
-          world={engine.world}
-          quests={engine.quests}
-          inventory={engine.player.inventory}
-          selectedHotbarIndex={engine.player.selectedHotbarIndex}
-          playerX={engine.player.x}
-          playerY={engine.player.y}
-          onSelectHotbar={(idx) => engine.selectHotbarSlot(idx)}
-          onOpenInventory={() => setActiveModal('inventory')}
-          onOpenCrafting={() => setActiveModal('crafting')}
-          onOpenBuilding={() => setActiveModal('building')}
-          onOpenMap={() => setActiveModal('map')}
-          onOpenSkills={() => setActiveModal('skills')}
-          onOpenQuests={() => setActiveModal('quests')}
-          onPause={() => {
-            setGameState('paused');
-            engine.stop();
-          }}
-          onAttack={() => engine.triggerAttackOrInteract()}
-          onToggleSprint={(sprinting) => {
-            engine.isTouchSprint = sprinting;
-            forceUpdate();
-          }}
-          isSprinting={engine.isTouchSprint}
-          onJoystickMove={(vec) => {
-            engine.joystickVector = vec;
-          }}
-        />
-      )}
+      {gameState === 'playing' && engine && (() => {
+        let nearbyLabel: string | null = null;
+        const nearbyStruct = engine.getNearbyInteractiveStructure();
+        if (nearbyStruct) {
+          const sType = nearbyStruct.type as string;
+          if (sType === 'cave_entrance') nearbyLabel = '🕳️ ENTRAR NA CAVERNA';
+          else if (sType === 'cave_exit') nearbyLabel = '🪜 SUBIR À SUPERFÍCIE';
+          else if (sType === 'chest') nearbyLabel = '📦 ABRIR BAÚ';
+          else if (sType === 'campfire' || sType === 'campfire_item' || sType === 'furnace' || sType === 'furnace_item') nearbyLabel = '🔥 COZINHAR / FORJAR';
+          else if (sType === 'workbench' || sType === 'workbench_item' || sType === 'weapon_workbench' || sType === 'weapon_workbench_item') nearbyLabel = '🛠️ BANCADA DE TRABALHO';
+          else if (sType === 'bed') nearbyLabel = '🛏️ DORMIR / PONTO DE RETORNO';
+          else if (sType === 'well') nearbyLabel = '💧 BEBER ÁGUA';
+          else if (sType === 'wood_door') nearbyLabel = nearbyStruct.isOpen ? '🚪 FECHAR PORTA' : '🚪 ABRIR PORTA';
+          else if (sType === 'farmland' && nearbyStruct.cropStage && nearbyStruct.cropStage >= 3) nearbyLabel = '🌾 COLHER PLANTAÇÃO';
+          else if (sType === 'raft' || sType === 'canoe' || sType === 'wood_boat') nearbyLabel = engine.player.isBoating ? '⛵ DESEMBARCAR' : '⛵ EMBARCAR NO BARCO';
+        }
+
+        return (
+          <HUD
+            stats={engine.player.stats}
+            world={engine.world}
+            quests={engine.quests}
+            inventory={engine.player.inventory}
+            selectedHotbarIndex={engine.player.selectedHotbarIndex}
+            playerX={engine.player.x}
+            playerY={engine.player.y}
+            isInsideCave={!!engine.player.isInsideCave}
+            nearbyInteractiveLabel={nearbyLabel}
+            onInteract={() => {
+              const s = engine.getNearbyInteractiveStructure();
+              if (s) engine.interactWithStructure(s);
+            }}
+            onSelectHotbar={(idx) => engine.selectHotbarSlot(idx)}
+            onOpenInventory={() => setActiveModal('inventory')}
+            onOpenCrafting={() => setActiveModal('crafting')}
+            onOpenBuilding={() => setActiveModal('building')}
+            onOpenMap={() => setActiveModal('map')}
+            onOpenSkills={() => setActiveModal('skills')}
+            onOpenQuests={() => setActiveModal('quests')}
+            onPause={() => {
+              setGameState('paused');
+              engine.stop();
+            }}
+            onAttack={() => engine.triggerAttackOrInteract()}
+            onToggleSprint={(sprinting) => {
+              engine.isTouchSprint = sprinting;
+              forceUpdate();
+            }}
+            isSprinting={engine.isTouchSprint}
+            onJoystickMove={(vec) => {
+              engine.joystickVector = vec;
+            }}
+          />
+        );
+      })()}
 
       {/* Modals */}
       {activeModal === 'inventory' && engine && (

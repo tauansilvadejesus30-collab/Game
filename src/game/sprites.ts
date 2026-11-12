@@ -564,82 +564,103 @@ export class SpriteRenderer {
     ctx.fillStyle = '#ffd5b0'; // Hand
     ctx.fillRect(0, 5, 4, 4);
 
-    // Draw Held Weapon/Tool with Dedicated Sprites
+    // Draw Held Weapon/Tool or Resource in Player's Hand
     if (equippedWeapon) {
-      if (equippedWeapon.includes('knife')) {
-        // Knife handle
+      if (equippedWeapon.includes('pickaxe')) {
+        // Wooden handle with grip bands
+        ctx.fillStyle = '#8f5d34';
+        ctx.fillRect(2, -14, 3, 26);
         ctx.fillStyle = '#5c3a21';
-        ctx.fillRect(1, 2, 3, 6);
-        // Blade
-        ctx.fillStyle = equippedWeapon.includes('iron') ? '#cbd5e1' : equippedWeapon.includes('bone') ? '#fef08a' : '#94a3b8';
-        ctx.fillRect(1, -10, 3, 12);
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(3, -10, 1, 12);
-      } else if (equippedWeapon.includes('saw')) {
-        // D-handle
-        ctx.fillStyle = '#8f5d34';
-        ctx.fillRect(0, 2, 6, 7);
-        // Blade
-        ctx.fillStyle = equippedWeapon.includes('iron') ? '#94a3b8' : '#64748b';
-        ctx.fillRect(1, -16, 5, 18);
-        ctx.fillStyle = '#ffffff';
-        for (let t = -14; t < 0; t += 3) {
-          ctx.fillRect(6, t, 2, 2);
-        }
-      } else if (equippedWeapon.includes('hammer')) {
-        // Handle
-        ctx.fillStyle = '#8f5d34';
-        ctx.fillRect(2, -10, 3, 22);
-        // Mallet Head
-        ctx.fillStyle = equippedWeapon.includes('iron') ? '#334155' : equippedWeapon.includes('stone') ? '#78716c' : '#a16207';
-        ctx.fillRect(-4, -16, 14, 8);
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(-4, -16, 2, 8);
-      } else if (equippedWeapon.includes('spear')) {
-        // Long shaft
-        ctx.fillStyle = '#8f5d34';
-        ctx.fillRect(2, -24, 3, 36);
-        // Spearhead
-        ctx.fillStyle = equippedWeapon.includes('iron') ? '#93c5fd' : equippedWeapon.includes('flint') ? '#e2e8f0' : '#d97706';
-        ctx.fillRect(1, -32, 5, 8);
-        ctx.fillRect(2, -35, 3, 3);
+        ctx.fillRect(2, 6, 3, 4);
+
+        // Pickaxe Head Collar
+        const isIron = equippedWeapon.includes('iron');
+        const isGold = equippedWeapon.includes('gold');
+        const isCopper = equippedWeapon.includes('copper');
+        const headColor = isGold ? '#fbbf24' : isIron ? '#cbd5e1' : isCopper ? '#ea580c' : '#8a8f94';
+        const tipColor = isGold ? '#fef08a' : isIron ? '#ffffff' : isCopper ? '#fed7aa' : '#e2e8f0';
+
+        // Curved double-pick head
+        ctx.fillStyle = headColor;
+        ctx.fillRect(-7, -15, 20, 4);
+        ctx.fillRect(-10, -13, 5, 4);
+        ctx.fillRect(11, -13, 5, 4);
+        // Downward sharp curved tips
+        ctx.fillStyle = tipColor;
+        ctx.fillRect(-12, -10, 3, 3);
+        ctx.fillRect(15, -10, 3, 3);
+        // Center metal collar ring
+        ctx.fillStyle = '#334155';
+        ctx.fillRect(1, -16, 5, 6);
       } else if (equippedWeapon.includes('axe')) {
         // Wooden handle
         ctx.fillStyle = '#8f5d34';
         ctx.fillRect(2, -14, 3, 26);
-        // Axe Blade (Copper, Iron or Stone)
+        ctx.fillStyle = '#5c3a21';
+        ctx.fillRect(2, 6, 3, 4);
+        // Axe Blade
         ctx.fillStyle = equippedWeapon.includes('copper') ? '#ea580c' : equippedWeapon.includes('iron') ? '#9ec7d9' : '#8a8f94';
-        ctx.fillRect(5, -16, 9, 8);
+        ctx.fillRect(5, -17, 10, 9);
+        ctx.fillRect(6, -20, 6, 4);
+        ctx.fillRect(6, -8, 6, 3);
+        // Axe sharp cutting bevel edge
         ctx.fillStyle = '#ffffff';
-        ctx.fillRect(13, -16, 2, 8);
-      } else if (equippedWeapon.includes('pickaxe')) {
-        ctx.fillStyle = '#8f5d34';
-        ctx.fillRect(2, -14, 3, 26);
-        ctx.fillStyle = equippedWeapon.includes('copper') ? '#ea580c' : equippedWeapon.includes('iron') ? '#9ec7d9' : '#8a8f94';
-        ctx.fillRect(-4, -16, 16, 4);
+        ctx.fillRect(14, -18, 2, 11);
       } else if (equippedWeapon.includes('sword') || equippedWeapon.includes('club')) {
         if (equippedWeapon.includes('club')) {
           ctx.fillStyle = '#78350f';
           ctx.fillRect(1, -18, 6, 26);
         } else {
-          // Hilt
-          ctx.fillStyle = equippedWeapon.includes('gold') ? '#f59e0b' : '#d4af37';
-          ctx.fillRect(-2, 3, 9, 3);
+          // Crossguard
+          const isGold = equippedWeapon.includes('gold');
+          const isIron = equippedWeapon.includes('iron');
+          ctx.fillStyle = isGold ? '#f59e0b' : '#d4af37';
+          ctx.fillRect(-3, 2, 12, 3);
           ctx.fillStyle = '#5c3a21';
-          ctx.fillRect(1, 6, 3, 5);
+          ctx.fillRect(1, 5, 4, 6);
+          // Pommel
+          ctx.fillStyle = isGold ? '#f59e0b' : '#d4af37';
+          ctx.fillRect(0, 11, 6, 2);
           // Blade
-          ctx.fillStyle = equippedWeapon.includes('gold') ? '#fbbf24' : equippedWeapon.includes('iron') ? '#b8d8e8' : '#a8b0b5';
-          ctx.fillRect(1, -22, 4, 25);
+          ctx.fillStyle = isGold ? '#fbbf24' : isIron ? '#b8d8e8' : '#a8b0b5';
+          ctx.fillRect(1, -24, 4, 26);
           ctx.fillStyle = '#ffffff';
-          ctx.fillRect(2, -22, 1, 23);
+          ctx.fillRect(2, -24, 1, 24);
+          ctx.fillRect(2, -26, 2, 3);
         }
+      } else if (equippedWeapon.includes('knife')) {
+        ctx.fillStyle = '#5c3a21';
+        ctx.fillRect(1, 2, 3, 6);
+        ctx.fillStyle = equippedWeapon.includes('iron') ? '#cbd5e1' : equippedWeapon.includes('bone') ? '#fef08a' : '#94a3b8';
+        ctx.fillRect(1, -10, 3, 12);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(3, -10, 1, 12);
+      } else if (equippedWeapon.includes('spear')) {
+        ctx.fillStyle = '#8f5d34';
+        ctx.fillRect(2, -26, 3, 38);
+        ctx.fillStyle = equippedWeapon.includes('iron') ? '#93c5fd' : equippedWeapon.includes('flint') ? '#e2e8f0' : '#d97706';
+        ctx.fillRect(1, -34, 5, 9);
+        ctx.fillRect(2, -37, 3, 4);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(3, -37, 1, 10);
+      } else if (equippedWeapon.includes('hammer')) {
+        ctx.fillStyle = '#8f5d34';
+        ctx.fillRect(2, -10, 3, 22);
+        ctx.fillStyle = equippedWeapon.includes('iron') ? '#334155' : '#78716c';
+        ctx.fillRect(-5, -17, 16, 9);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(-5, -17, 2, 9);
       } else if (equippedWeapon.includes('torch')) {
         ctx.fillStyle = '#734b26';
         ctx.fillRect(2, -10, 3, 20);
-        ctx.fillStyle = '#ff9900';
-        ctx.fillRect(0, -16, 7, 7);
-        ctx.fillStyle = '#ffff33';
-        ctx.fillRect(2, -14, 3, 4);
+        // Flickering Torch Flame
+        const flameOffset = Math.sin(Date.now() * 0.015) * 1.5;
+        ctx.fillStyle = '#ff6b00';
+        ctx.fillRect(0 + flameOffset, -18, 7, 8);
+        ctx.fillStyle = '#ffaa00';
+        ctx.fillRect(1 + flameOffset, -16, 5, 6);
+        ctx.fillStyle = '#ffff66';
+        ctx.fillRect(2 + flameOffset, -14, 3, 3);
       } else if (equippedWeapon.includes('bow')) {
         ctx.strokeStyle = '#8f5d34';
         ctx.lineWidth = 3;
@@ -652,6 +673,70 @@ export class SpriteRenderer {
         ctx.moveTo(11, -10);
         ctx.lineTo(11, 10);
         ctx.stroke();
+      } else if (equippedWeapon.includes('pistol')) {
+        ctx.fillStyle = '#334155';
+        ctx.fillRect(1, 0, 4, 7);
+        ctx.fillStyle = '#475569';
+        ctx.fillRect(0, -9, 6, 9);
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillRect(1, -9, 4, 2);
+      } else if (equippedWeapon.includes('rifle')) {
+        ctx.fillStyle = '#78350f';
+        ctx.fillRect(1, 2, 4, 10);
+        ctx.fillStyle = '#334155';
+        ctx.fillRect(1, -22, 3, 24);
+        ctx.fillStyle = '#cbd5e1';
+        ctx.fillRect(2, -22, 1, 24);
+      } else if (equippedWeapon.includes('crystal')) {
+        // Glowing Cave Crystal in hand
+        ctx.fillStyle = '#c084fc';
+        ctx.fillRect(0, -6, 7, 10);
+        ctx.fillStyle = '#a855f7';
+        ctx.fillRect(-2, -3, 4, 7);
+        ctx.fillStyle = '#e9d5ff';
+        ctx.fillRect(2, -5, 3, 4);
+      } else if (equippedWeapon.includes('diamond')) {
+        // Sparkling blue diamond gem
+        ctx.fillStyle = '#38bdf8';
+        ctx.fillRect(0, -5, 8, 8);
+        ctx.fillStyle = '#e0f2fe';
+        ctx.fillRect(1, -4, 4, 4);
+      } else if (equippedWeapon.includes('gold')) {
+        // Gold ingot / ore
+        ctx.fillStyle = '#f59e0b';
+        ctx.fillRect(0, -4, 9, 7);
+        ctx.fillStyle = '#fef08a';
+        ctx.fillRect(1, -3, 7, 2);
+      } else if (equippedWeapon.includes('ore') || equippedWeapon === 'stone' || equippedWeapon.includes('flint')) {
+        // Mineral stone chunk
+        ctx.fillStyle = equippedWeapon.includes('iron') ? '#64748b' : '#78716c';
+        ctx.fillRect(-1, -4, 8, 8);
+        ctx.fillStyle = '#a8a29e';
+        ctx.fillRect(1, -3, 4, 3);
+      } else if (equippedWeapon.includes('meat') || equippedWeapon.includes('fish')) {
+        // Meat or fish in hand
+        ctx.fillStyle = equippedWeapon.includes('cooked') ? '#92400e' : '#ef4444';
+        ctx.fillRect(-1, -5, 9, 8);
+        ctx.fillStyle = '#fef3c7';
+        ctx.fillRect(6, -2, 4, 3);
+      } else if (equippedWeapon.includes('potion') || equippedWeapon.includes('bottle')) {
+        // Glass flask in hand
+        ctx.fillStyle = '#ef4444';
+        ctx.fillRect(0, -5, 7, 8);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(1, -4, 2, 4);
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillRect(2, -8, 3, 3);
+      } else if (equippedWeapon.includes('wood') || equippedWeapon.includes('branch') || equippedWeapon.includes('stick')) {
+        // Log / branch in hand
+        ctx.fillStyle = '#8f5d34';
+        ctx.fillRect(1, -8, 5, 14);
+        ctx.fillStyle = '#5c3a21';
+        ctx.fillRect(2, -6, 3, 2);
+      } else {
+        // Generic item held in palm
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillRect(0, -3, 6, 6);
       }
     }
     ctx.restore();

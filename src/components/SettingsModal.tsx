@@ -40,44 +40,44 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-3">
-      <div className="bg-[#171926] border-2 border-[#4b4e6d] rounded-2xl w-full max-w-md p-6 flex flex-col shadow-2xl">
+    <div className="fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-3 select-none touch-none">
+      <div className="bg-neutral-950 border-2 border-neutral-700/80 rounded-2xl w-full max-w-md p-5 flex flex-col shadow-2xl font-sans">
         {/* Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-[#2b2e42]">
+        <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
           <div className="flex items-center gap-2">
             <Sliders className="w-5 h-5 text-yellow-400" />
-            <h2 className="font-pixel text-sm md:text-base text-yellow-400">AJUSTES DO JOGO</h2>
+            <h2 className="font-pixel text-xs sm:text-sm text-white">AJUSTES DO JOGO</h2>
           </div>
           <button
             onClick={() => {
               soundEngine.playUiClick();
               onClose();
             }}
-            className="w-8 h-8 rounded-lg bg-[#25283b] hover:bg-rose-900/60 text-gray-300 hover:text-white flex items-center justify-center cursor-pointer transition-colors"
+            className="w-8 h-8 rounded-lg bg-neutral-900 hover:bg-red-950 text-neutral-400 hover:text-white flex items-center justify-center border border-neutral-800 cursor-pointer transition-colors active:scale-95"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Volume Sliders */}
-        <div className="flex flex-col gap-4 my-6">
+        <div className="flex flex-col gap-4 my-5">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-gray-300">Som Mudo (Mute)</span>
+            <span className="text-xs font-bold text-neutral-300">Áudio Geral</span>
             <button
               onClick={handleToggleMute}
-              className={`p-2 rounded-lg border flex items-center gap-2 text-xs font-bold cursor-pointer transition-colors ${
-                isMuted ? 'bg-rose-950 border-rose-700 text-rose-300' : 'bg-[#202436] border-[#3b3f5c] text-emerald-300'
+              className={`p-2 rounded-xl border flex items-center gap-2 text-xs font-bold cursor-pointer transition-all active:scale-95 ${
+                isMuted ? 'bg-red-950/60 border-red-800 text-red-300' : 'bg-neutral-900 border-neutral-700 text-white'
               }`}
             >
-              {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+              {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4 text-yellow-400" />}
               <span>{isMuted ? 'MUDO ATIVADO' : 'SOM ATIVO'}</span>
             </button>
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <div className="flex justify-between text-xs text-gray-300">
+            <div className="flex justify-between text-xs text-neutral-300 font-mono">
               <span>Efeitos Sonoros (SFX)</span>
-              <span className="font-bold tabular-nums">{Math.round(sfxVol * 100)}%</span>
+              <span className="font-bold tabular-nums text-white">{Math.round(sfxVol * 100)}%</span>
             </div>
             <input
               type="range"
@@ -91,9 +91,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <div className="flex justify-between text-xs text-gray-300">
+            <div className="flex justify-between text-xs text-neutral-300 font-mono">
               <span>Música Ambiente (BGM)</span>
-              <span className="font-bold tabular-nums">{Math.round(musicVol * 100)}%</span>
+              <span className="font-bold tabular-nums text-white">{Math.round(musicVol * 100)}%</span>
             </div>
             <input
               type="range"
@@ -107,35 +107,40 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
           </div>
         </div>
 
-        {/* Clear Data */}
-        <div className="pt-4 border-t border-[#2b2e42] flex justify-between items-center">
-          <div>
-            <span className="text-[11px] text-gray-400 block">Apagar Dados Salvos</span>
-            {deletedMsg && <span className="text-[10px] text-emerald-400">Progresso apagado com sucesso!</span>}
-          </div>
-          {confirmDelete ? (
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={handleClearSave}
-                className="px-2.5 py-1 bg-red-600 hover:bg-red-500 text-white rounded-lg text-[10px] font-bold cursor-pointer"
-              >
-                Confirmar
-              </button>
-              <button
-                onClick={() => setConfirmDelete(false)}
-                className="px-2 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg text-[10px] cursor-pointer"
-              >
-                Cancelar
-              </button>
+        {/* Save Data Management */}
+        <div className="pt-4 border-t border-neutral-800 flex flex-col gap-2">
+          <span className="text-xs font-bold text-neutral-400 font-mono">DADOS SALVOS NO DISPOSITIVO</span>
+          
+          {deletedMsg ? (
+            <div className="p-2.5 rounded-xl bg-emerald-950 border border-emerald-800 text-emerald-300 text-center text-xs font-pixel">
+              ✓ Dados do mapa limpos com sucesso!
             </div>
-          ) : (
+          ) : !confirmDelete ? (
             <button
               onClick={() => setConfirmDelete(true)}
-              className="px-3 py-1.5 bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-900/50 rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+              className="w-full py-2 bg-neutral-900 hover:bg-red-950 text-red-400 hover:text-white border border-neutral-800 hover:border-red-800 rounded-xl text-xs font-pixel flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95"
             >
               <Trash2 className="w-3.5 h-3.5" />
-              Limpar Salvo
+              <span>APAGAR PROGRESSO SALVO</span>
             </button>
+          ) : (
+            <div className="flex flex-col gap-2 p-3 bg-red-950/30 border border-red-800 rounded-xl">
+              <span className="text-xs text-red-300 text-center">Tem certeza? Isso apagará seu mundo salvo.</span>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => setConfirmDelete(false)}
+                  className="py-1.5 bg-neutral-900 text-neutral-300 rounded-lg text-xs font-pixel cursor-pointer"
+                >
+                  CANCELAR
+                </button>
+                <button
+                  onClick={handleClearSave}
+                  className="py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-pixel cursor-pointer"
+                >
+                  SIM, APAGAR
+                </button>
+              </div>
+            </div>
           )}
         </div>
       </div>

@@ -1,8 +1,9 @@
 import React from 'react';
 import { InventorySlot, StructureEntity } from '../game/types';
 import { ITEMS } from '../game/constants';
-import { X, Flame, Sparkles } from 'lucide-react';
+import { X, Flame } from 'lucide-react';
 import { soundEngine } from '../game/audio';
+import { ItemIcon } from './ItemIcon';
 
 interface CookingModalProps {
   station: StructureEntity;
@@ -29,6 +30,15 @@ export const CookingModal: React.FC<CookingModalProps> = ({
           fuelQty: 1,
           outputItemId: 'iron_ingot',
           desc: 'Funde o minério bruto de ferro para criar barras metálicas fortes.',
+        },
+        {
+          name: 'Barra de Ouro Valiosa',
+          inputItemId: 'gold_ore',
+          inputQty: 2,
+          fuelItemId: 'coal',
+          fuelQty: 1,
+          outputItemId: 'gold_ingot',
+          desc: 'Funde ouro extraído das cavernas em barras douradas reluzentes.',
         },
       ]
     : [
@@ -61,13 +71,13 @@ export const CookingModal: React.FC<CookingModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-3">
-      <div className="bg-[#171926] border-2 border-[#4b4e6d] rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-3 select-none touch-none">
+      <div className="bg-neutral-950 border-2 border-neutral-700/80 rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col shadow-2xl overflow-hidden font-sans">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3.5 bg-[#12141f] border-b border-[#2b2e42]">
+        <div className="flex items-center justify-between px-4 py-3 bg-black border-b border-neutral-800">
           <div className="flex items-center gap-2">
             <Flame className="w-5 h-5 text-orange-400" />
-            <h2 className="font-pixel text-sm md:text-base text-orange-400">
+            <h2 className="font-pixel text-xs sm:text-sm text-white">
               {isFurnace ? 'FORNALHA DE FUNDIÇÃO' : 'FOGUEIRA & CULINÁRIA'}
             </h2>
           </div>
@@ -76,22 +86,22 @@ export const CookingModal: React.FC<CookingModalProps> = ({
               soundEngine.playUiClick();
               onClose();
             }}
-            className="w-8 h-8 rounded-lg bg-[#25283b] hover:bg-rose-900/60 text-gray-300 hover:text-white flex items-center justify-center cursor-pointer transition-colors"
+            className="w-8 h-8 rounded-lg bg-neutral-900 hover:bg-red-950 text-neutral-400 hover:text-white flex items-center justify-center border border-neutral-800 cursor-pointer transition-colors active:scale-95"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="p-4 md:p-6 flex flex-col gap-3 overflow-y-auto">
-          <p className="text-xs text-gray-300">
+        <div className="p-3 sm:p-5 flex flex-col gap-3 overflow-y-auto">
+          <p className="text-xs text-neutral-300">
             {isFurnace
-              ? 'Use carvão como combustível para transformar minérios em barras puras para armas e armaduras.'
-              : 'Asse carnes e peixes crus para eliminar bactérias e obter o máximo de nutrientes e cura.'}
+              ? 'Use carvão como combustível para transformar minérios das cavernas em barras puras.'
+              : 'Asse carnes e peixes crus para obter o máximo de nutrientes e cura.'}
           </p>
 
-          <div className="flex flex-col gap-3 mt-2">
-            {recipes.map(r => {
+          <div className="flex flex-col gap-2.5">
+            {recipes.map((r, idx) => {
               const inputItem = ITEMS[r.inputItemId];
               const fuelItem = r.fuelItemId ? ITEMS[r.fuelItemId] : null;
               const outputItem = ITEMS[r.outputItemId];
@@ -102,53 +112,42 @@ export const CookingModal: React.FC<CookingModalProps> = ({
 
               return (
                 <div
-                  key={r.name}
-                  className="bg-[#10121a] border border-[#2b2e42] rounded-xl p-3.5 flex flex-col gap-3"
+                  key={idx}
+                  className="bg-black/60 border border-neutral-800 rounded-xl p-3 flex flex-col gap-2"
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
-                      <span className="text-2xl">{outputItem.icon}</span>
-                      <div>
-                        <h4 className="font-bold text-xs text-yellow-300">{r.name}</h4>
-                        <span className="text-[10px] text-gray-400">{r.desc}</span>
+                      <div className="w-10 h-10 rounded-lg bg-neutral-900 border border-neutral-700 flex items-center justify-center">
+                        <ItemIcon id={outputItem?.id} fallbackIcon={outputItem?.icon} size="md" />
                       </div>
-                    </div>
-                  </div>
-
-                  {/* Requirements bar */}
-                  <div className="flex items-center justify-between bg-[#171926] p-2 rounded-lg text-xs">
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-1">
-                        <span>{inputItem.icon}</span>
-                        <span className={hasInput ? 'text-emerald-400' : 'text-rose-400'}>
-                          {getQty(r.inputItemId)}/{r.inputQty}
+                      <div className="flex flex-col">
+                        <span className="font-bold text-xs sm:text-sm text-white">{r.name}</span>
+                        <span className="text-[10px] text-neutral-400 font-mono">
+                          Requer: {inputItem?.name} (x{r.inputQty}) {fuelItem ? `+ ${fuelItem.name} (x${r.fuelQty})` : ''}
                         </span>
                       </div>
-                      {fuelItem && (
-                        <div className="flex items-center gap-1">
-                          <span>{fuelItem.icon}</span>
-                          <span className={hasFuel ? 'text-emerald-400' : 'text-rose-400'}>
-                            {getQty(r.fuelItemId!)}/{r.fuelQty}
-                          </span>
-                        </div>
-                      )}
                     </div>
 
                     <button
-                      disabled={!canCook}
                       onClick={() => {
+                        if (!canCook) return;
                         soundEngine.playEat();
                         onCookItem(r.inputItemId, r.outputItemId, r.fuelItemId);
                       }}
-                      className={`px-3 py-1.5 rounded-lg font-bold font-pixel text-[10px] transition-all cursor-pointer ${
+                      disabled={!canCook}
+                      className={`px-3 py-1.5 rounded-xl font-pixel text-[9px] sm:text-[10px] transition-all cursor-pointer ${
                         canCook
-                          ? 'bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-black shadow active:scale-95'
-                          : 'bg-[#202436] text-gray-500 border border-[#2b2e42] cursor-not-allowed'
+                          ? 'bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white border border-yellow-400 active:scale-95 shadow-md'
+                          : 'bg-neutral-900 text-neutral-500 border border-neutral-800 cursor-not-allowed opacity-60'
                       }`}
                     >
-                      {isFurnace ? 'FUNDIR' : 'PREPARAR'}
+                      {canCook ? 'PREPARAR' : 'FALTAM ITENS'}
                     </button>
                   </div>
+
+                  <p className="text-[10px] text-neutral-400 font-sans leading-tight">
+                    {r.desc}
+                  </p>
                 </div>
               );
             })}

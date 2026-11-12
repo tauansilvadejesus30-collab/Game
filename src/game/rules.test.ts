@@ -268,5 +268,20 @@ test('savanna biome maintains appropriate daytime and night temperature', () => 
   assert.equal(nightTemp, 26, 'Savanna night cools down to 26C');
 });
 
+test('tools distinguish pickaxe from axe properly', () => {
+  assert.equal(ITEMS.stone_pickaxe.toolType, 'pickaxe');
+  assert.equal(ITEMS.iron_pickaxe.toolType, 'pickaxe');
+  assert.equal(ITEMS.stone_axe.toolType, 'axe');
+  assert.equal(ITEMS.iron_axe.toolType, 'axe');
+  assert.notEqual(ITEMS.stone_pickaxe.toolType, ITEMS.stone_axe.toolType);
+});
+
+test('cave items and crystal resources exist with descriptions', () => {
+  assert.ok(ITEMS.cave_crystal, 'Cave crystal item is defined');
+  assert.ok(ITEMS.diamond_gem, 'Diamond gem item is defined');
+  assert.ok(ITEMS.iron_pickaxe, 'Iron pickaxe is defined');
+  assert.equal(ITEMS.cave_crystal.category, 'resource');
+});
+
 
 

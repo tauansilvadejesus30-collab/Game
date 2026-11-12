@@ -30,7 +30,7 @@ import {
   updateSwimmingBreath,
   canDismantleWithTool
 } from './rules';
-import { saveGame, loadGame } from './saveManager';
+import { saveGame, loadGame, clearSavedGame } from './saveManager';
 
 export class GameEngine {
   public canvas: HTMLCanvasElement;
@@ -217,6 +217,27 @@ export class GameEngine {
     };
   }
 
+  public resetWorld(isNew: boolean = true) {
+    if (isNew) {
+      clearSavedGame();
+    }
+    this.world = generateWorld();
+    this.caveWorld = generateCaveWorld();
+    this.overworldWorld = null;
+    this.overworldPos = null;
+    this.quests = JSON.parse(JSON.stringify(INITIAL_QUESTS));
+    this.player = this.createDefaultPlayer();
+    this.player.isInsideCave = false;
+    this.cameraX = this.player.x;
+    this.cameraY = this.player.y;
+    this.particles = [];
+    this.isBuildingMode = false;
+    this.selectedBuildingStructureId = null;
+    this.gameTimeMs = 0;
+    this.autoSaveTimer = 0;
+    this.onStateChange?.();
+  }
+
   public resizeCanvas() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const rect = this.canvas.getBoundingClientRect();
@@ -385,12 +406,14 @@ export class GameEngine {
     return false;
   }
 
-  public getNearbyInteractiveStructure(maxDist = 80): StructureEntity | null {
+  public getNearbyInteractiveStructure(maxDist = 85): StructureEntity | null {
     let closest: StructureEntity | null = null;
     let closestDist = maxDist;
     for (const struct of this.world.structures) {
+      const structSize = Math.max(struct.width || TILE_SIZE, struct.height || TILE_SIZE);
+      const effectiveDist = Math.max(maxDist, structSize / 2 + 55);
       const dist = Math.hypot(struct.x - this.player.x, struct.y - this.player.y);
-      if (dist < closestDist) {
+      if (dist < effectiveDist && dist < closestDist) {
         closest = struct;
         closestDist = dist;
       }
@@ -477,7 +500,15 @@ export class GameEngine {
   public triggerAttackOrInteract() {
     if (this.player.isAttacking || this.player.isRolling) return;
 
-    // Check if in Building Mode
+    // 1. If near an interactive structure (cave entrance, ladder, chest, furnace, etc.), interact directly!
+    const nearbyStruct = this.getNearbyInteractiveStructure();
+    if (nearbyStruct && !this.isBuildingMode) {
+      if (this.interactWithStructure(nearbyStruct)) {
+        return;
+      }
+    }
+
+    // 2. Check if in Building Mode
     if (this.isBuildingMode && this.selectedBuildingStructureId) {
       this.tryPlaceStructure();
       return;
@@ -800,6 +831,7 @@ export class GameEngine {
     soundEngine.playLevelUp();
     this.triggerShake(5, 0.4);
     this.addFloatingText(this.player.x, this.player.y - 30, 'Entrou na Caverna Sombria...', '#67e8f9');
+    this.checkQuestProgress('explore', 'cave', 1);
     this.onStateChange?.();
   }
 

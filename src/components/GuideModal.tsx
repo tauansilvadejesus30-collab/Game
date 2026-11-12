@@ -8,71 +8,79 @@ interface GuideModalProps {
 
 export const GuideModal: React.FC<GuideModalProps> = ({ onClose }) => {
   return (
-    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-3">
-      <div className="bg-[#171926] border-2 border-[#4b4e6d] rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-3 select-none touch-none">
+      <div className="bg-neutral-950 border-2 border-neutral-700/80 rounded-2xl w-full max-w-2xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden font-sans">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3.5 bg-[#12141f] border-b border-[#2b2e42]">
+        <div className="flex items-center justify-between px-4 py-3 bg-black border-b border-neutral-800 shrink-0">
           <div className="flex items-center gap-2">
-            <HelpCircle className="w-5 h-5 text-amber-400" />
-            <h2 className="font-pixel text-sm md:text-base text-amber-400">GUIA DE SOBREVIVÊNCIA</h2>
+            <HelpCircle className="w-5 h-5 text-yellow-400" />
+            <h2 className="font-pixel text-xs sm:text-sm text-white">GUIA DE SOBREVIVÊNCIA & CAVERNAS</h2>
           </div>
           <button
             onClick={() => {
               soundEngine.playUiClick();
               onClose();
             }}
-            className="w-8 h-8 rounded-lg bg-[#25283b] hover:bg-rose-900/60 text-gray-300 hover:text-white flex items-center justify-center cursor-pointer transition-colors"
+            className="w-8 h-8 rounded-lg bg-neutral-900 hover:bg-red-950 text-neutral-400 hover:text-white flex items-center justify-center border border-neutral-800 cursor-pointer transition-colors active:scale-95"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="p-5 overflow-y-auto flex flex-col gap-5 text-xs text-gray-300 leading-relaxed">
-          {/* Controls table */}
+        <div className="p-4 sm:p-6 overflow-y-auto flex flex-col gap-4 text-xs text-neutral-300 leading-relaxed">
+          {/* Cave Exploration Banner */}
+          <div className="relative rounded-xl overflow-hidden border border-neutral-700 h-32 sm:h-40 bg-cover bg-center shadow-lg"
+            style={{ backgroundImage: `url('/assets/images/cave_exploration_bg_1794483133593.jpg')` }}
+          >
+            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent p-3 flex flex-col justify-end">
+              <span className="font-pixel text-xs sm:text-sm text-yellow-300">🕳️ EXPLORAÇÃO SUBTERRÂNEA</span>
+              <p className="text-[10px] sm:text-[11px] text-neutral-200 font-sans mt-0.5">
+                Desça às cavernas escuras para minerar diamantes, ouro e cristais raros. Leve sempre tochas para não ficar no escuro!
+              </p>
+            </div>
+          </div>
+
+          {/* Mobile Touch Controls (100% Mobile focused) */}
           <div>
-            <h3 className="font-pixel text-xs text-yellow-300 mb-2">🎮 CONTROLES DO TECLADO & MOUSE</h3>
-            <div className="grid grid-cols-2 gap-2 bg-[#10121a] p-3 rounded-xl border border-[#2b2e42]">
-              <div><strong className="text-white">W, A, S, D</strong> ou <strong className="text-white">Setas</strong>: Movimentação</div>
-              <div><strong className="text-white">Espaço</strong> ou <strong className="text-white">Clique Esquerdo</strong>: Atacar / Coletar / Interagir</div>
-              <div><strong className="text-white">Shift</strong>: Correr rápido (gasta energia)</div>
-              <div><strong className="text-white">1 a 8</strong>: Selecionar item da Barra Rápida</div>
-              <div><strong className="text-white">E</strong>: Abrir Mochila / Equipamentos</div>
-              <div><strong className="text-white">C</strong>: Abrir Menu de Fabricação</div>
-              <div><strong className="text-white">B</strong>: Modo Construção de Base</div>
-              <div><strong className="text-white">M</strong>: Abrir Mapa do Mundo</div>
-              <div><strong className="text-white">K</strong>: Árvore de Habilidades</div>
-              <div><strong className="text-white">Esc / P</strong>: Pausar o Jogo</div>
+            <h3 className="font-pixel text-[11px] text-yellow-400 mb-2">📱 CONTROLES TOUCH MOBILE</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-black/60 p-3 rounded-xl border border-neutral-800">
+              <div><strong className="text-white">Analógico Virtual (Esquerda):</strong> Mover o personagem em qualquer direção.</div>
+              <div><strong className="text-white">Botão de AÇÃO (Direita):</strong> Atacar monstros, cortar árvores, minerar rochas ou interagir.</div>
+              <div><strong className="text-white">Botão de CORRER:</strong> Ativa corrida para escapar rápido (gasta energia).</div>
+              <div><strong className="text-white">Barra Inferior (1-8):</strong> Toque no item para equipar na mão do personagem.</div>
+              <div><strong className="text-white">Botão [🕳️ ENTRAR]:</strong> Aparece automaticamente ao se aproximar de cavernas ou baús.</div>
+              <div><strong className="text-white">Ícones Laterais:</strong> Mochila (🎒), Forja (🔨), Construção (✨) e Habilidades (⭐).</div>
             </div>
           </div>
 
           {/* Survival Mechanics */}
           <div>
-            <h3 className="font-pixel text-xs text-yellow-300 mb-2">❤️ SISTEMA DE SOBREVIVÊNCIA</h3>
-            <div className="flex flex-col gap-2">
-              <div className="p-2.5 rounded-lg bg-[#141624] border border-[#2b2e42]">
-                <strong className="text-red-400">Vida (HP):</strong> Se chegar a zero, você é derrotado. Recupera naturalmente quando estiver bem alimentado, hidratado e com temperatura normal.
+            <h3 className="font-pixel text-[11px] text-yellow-400 mb-2">❤️ STATUS VITAIS</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="p-2.5 rounded-lg bg-neutral-900 border border-neutral-800">
+                <strong className="text-red-400">Vida (HP):</strong> Se zerar, você é derrotado. Recupera naturalmente quando estiver alimentado e hidratado.
               </div>
-              <div className="p-2.5 rounded-lg bg-[#141624] border border-[#2b2e42]">
-                <strong className="text-amber-400">Fome:</strong> Diminui gradualmente. Coma maçãs, frutas vermelhas ou assar carne na fogueira para restaurar.
+              <div className="p-2.5 rounded-lg bg-neutral-900 border border-neutral-800">
+                <strong className="text-amber-400">Fome:</strong> Coma maçãs, tomates ou asse carnes e peixes na fogueira para restaurar.
               </div>
-              <div className="p-2.5 rounded-lg bg-[#141624] border border-[#2b2e42]">
-                <strong className="text-cyan-400">Sede:</strong> Beba água no poço da base, beba do cantil ou colha frutas suculentas.
+              <div className="p-2.5 rounded-lg bg-neutral-900 border border-neutral-800">
+                <strong className="text-sky-400">Sede:</strong> Beba água no poço da base, beba direto dos rios ou consuma água engarrafada.
               </div>
-              <div className="p-2.5 rounded-lg bg-[#141624] border border-[#2b2e42]">
-                <strong className="text-purple-400">Temperatura Corporal:</strong> À noite e na chuva o corpo esfria. Fique perto de fogueiras, tochas ou dentro de cabanas para se aquecer.
+              <div className="p-2.5 rounded-lg bg-neutral-900 border border-neutral-800">
+                <strong className="text-purple-400">Temperatura:</strong> À noite o corpo esfria. Fique perto de fogueiras ou tochas para se aquecer.
               </div>
             </div>
           </div>
 
           {/* Tips */}
           <div>
-            <h3 className="font-pixel text-xs text-yellow-300 mb-2">💡 DICAS IMPORTANTES</h3>
-            <ul className="list-disc list-inside space-y-1 text-gray-400">
-              <li>Use o <strong className="text-white">Machado</strong> para cortar árvores e a <strong className="text-white">Picareta</strong> para minerar rochas.</li>
-              <li>À noite, monstros perigosos (Zumbis e Lobos) aparecem com mais frequência. Durma na <strong className="text-white">Cama</strong> para avançar para o amanhecer.</li>
-              <li>A agricultura permite colher tomates que saciam fome e sede ao mesmo tempo.</li>
-              <li>Construa muros e portas ao redor da sua base para mantê-la segura.</li>
+            <h3 className="font-pixel text-[11px] text-yellow-400 mb-2">💡 DICAS DE MESTRE</h3>
+            <ul className="list-disc list-inside space-y-1 text-neutral-400 font-sans">
+              <li>Use a <strong className="text-white">Picareta</strong> para rochas e minérios, e o <strong className="text-white">Machado</strong> para troncos.</li>
+              <li>A <strong className="text-white">Picareta de Ferro</strong> minera minérios pesados com muito mais rapidez nas profundezas.</li>
+              <li>Encontre baús antigos escondidos nas cavernas para obter equipamentos e suprimentos raros.</li>
+              <li>Para sair da caverna, basta se aproximar da <strong className="text-white">Escada Central</strong> e tocar em Subir.</li>
             </ul>
           </div>
         </div>

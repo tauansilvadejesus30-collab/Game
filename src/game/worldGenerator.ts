@@ -286,7 +286,20 @@ export function generateWorld(): WorldState {
   createRuinedHouse(185, 75, 'desert');
   createRuinedHouse(195, 160, 'desert');
 
-  // Cave Entrances in Mountains, Snow Peaks, and Eastern Desert
+  // Cave Entrances: Starter clearing cave, Mountain depths, Snow Peaks, and Eastern Desert
+  structures.push({
+    id: 'cave_entrance_starter',
+    type: 'cave_entrance',
+    tileX: 65,
+    tileY: 52,
+    x: 65 * TILE_SIZE + TILE_SIZE / 2,
+    y: 52 * TILE_SIZE + TILE_SIZE / 2,
+    width: TILE_SIZE * 1.5,
+    height: TILE_SIZE * 1.5,
+    hp: 9999,
+    maxHp: 9999,
+  });
+
   structures.push({
     id: 'cave_entrance_mountain',
     type: 'cave_entrance',
@@ -1254,6 +1267,29 @@ export function generateCaveWorld(): WorldState {
     hp: 100,
     maxHp: 100,
     lit: true,
+  });
+
+  // Ancient underground chest with rare exploration rewards
+  structures.push({
+    id: 'cave_ancient_chest',
+    type: 'chest',
+    tileX: 32,
+    tileY: 28,
+    x: 32 * TILE_SIZE + TILE_SIZE / 2,
+    y: 28 * TILE_SIZE + TILE_SIZE / 2,
+    width: TILE_SIZE,
+    height: TILE_SIZE,
+    hp: 300,
+    maxHp: 300,
+    chestInventory: [
+      { item: ITEMS.iron_pickaxe, quantity: 1 },
+      { item: ITEMS.torch, quantity: 5 },
+      { item: ITEMS.health_potion, quantity: 3 },
+      { item: ITEMS.cooked_meat, quantity: 4 },
+      { item: ITEMS.diamond_gem, quantity: 2 },
+      { item: ITEMS.cave_crystal, quantity: 4 },
+      ...new Array(10).fill(null),
+    ],
   });
 
   // Dense rare ores & crystals in the cavern
