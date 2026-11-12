@@ -24,15 +24,21 @@ export const CraftingModal: React.FC<CraftingModalProps> = ({
 
   const categories = [
     { id: 'all', label: 'Tudo', icon: '✨' },
+    { id: 'firearms', label: 'Armas de Fogo', icon: '🔫' },
+    { id: 'workbench', label: 'Bancada', icon: '🛠️' },
     { id: 'survival', label: 'Sobrevivência', icon: '🏕️' },
     { id: 'tools', label: 'Ferramentas', icon: '🪓' },
-    { id: 'weapons', label: 'Armas', icon: '🗡️' },
+    { id: 'weapons', label: 'Armas Brancas', icon: '🗡️' },
     { id: 'building', label: 'Construção', icon: '🧱' },
     { id: 'cooking', label: 'Culinária', icon: '🍖' },
   ];
 
   const filteredRecipes = RECIPES.filter(r => {
     if (selectedCategory === 'all') return true;
+    if (selectedCategory === 'firearms') {
+      return r.requiresStation === 'weapon_workbench' || r.id === 'craft_weapon_workbench' || r.id === 'craft_gunpowder';
+    }
+    if (selectedCategory === 'workbench') return r.requiresStation === 'workbench';
     return r.category === selectedCategory;
   });
 
@@ -49,6 +55,7 @@ export const CraftingModal: React.FC<CraftingModalProps> = ({
 
   const getStationLabel = (station?: string) => {
     if (!station || station === 'none') return null;
+    if (station === 'weapon_workbench') return '🔫 Bancada de Armas';
     if (station === 'workbench') return '🛠️ Bancada de Trabalho';
     if (station === 'sawmill') return '🪚 Serraria';
     if (station === 'furnace') return '♨️ Fornalha';
@@ -101,8 +108,18 @@ export const CraftingModal: React.FC<CraftingModalProps> = ({
           <div className="flex items-center gap-2">
             <Hammer className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-400" />
             <h2 className="font-pixel text-xs sm:text-sm text-yellow-400 tracking-wide">
-              BANCADA DE FABRICAÇÃO
+              FABRICAÇÃO
             </h2>
+            {nearbyStations.includes('workbench') ? (
+              <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-500/80 text-emerald-300 text-[10px] font-bold">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                🛠️ Bancada Conectada
+              </span>
+            ) : (
+              <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#1e2338] border border-[#3b3f5c] text-gray-300 text-[10px] font-medium">
+                🎒 Manual
+              </span>
+            )}
           </div>
 
           {/* Quick material counters */}

@@ -1,6 +1,6 @@
 export type Direction = 'down' | 'up' | 'left' | 'right';
 
-export type BiomeType = 'forest' | 'beach' | 'mountain' | 'desert' | 'ruins' | 'snow';
+export type BiomeType = 'forest' | 'beach' | 'mountain' | 'desert' | 'ruins' | 'snow' | 'savanna';
 
 export type WeatherType = 'sunny' | 'cloudy' | 'rain' | 'thunderstorm' | 'snow' | 'blizzard' | 'heatwave' | 'earthquake';
 
@@ -21,7 +21,7 @@ export interface ItemDef {
   stackable: boolean;
   maxStack: number;
   icon: string;
-  toolType?: 'axe' | 'pickaxe' | 'hoe' | 'rod' | 'knife' | 'saw' | 'hammer' | 'spear' | 'sword' | 'bow' | 'shovel';
+  toolType?: 'axe' | 'pickaxe' | 'hoe' | 'rod' | 'knife' | 'saw' | 'hammer' | 'spear' | 'sword' | 'bow' | 'shovel' | 'gun';
   toolTier?: number;
   damage?: number;
   defense?: number;
@@ -59,7 +59,7 @@ export interface Recipe {
   outputQuantity: number;
   ingredients: RecipeRequirement[];
   category: 'tools' | 'weapons' | 'survival' | 'building' | 'cooking';
-  requiresStation?: 'workbench' | 'campfire' | 'furnace' | 'sawmill' | 'anvil';
+  requiresStation?: 'workbench' | 'campfire' | 'furnace' | 'sawmill' | 'anvil' | 'weapon_workbench';
 }
 
 export interface SkillNode {
@@ -133,7 +133,7 @@ export interface PlayerEntity {
   isInsideCave?: boolean;
 }
 
-export type EnemyType = 'wolf' | 'zombie' | 'skeleton' | 'bear' | 'boss_spectre';
+export type EnemyType = 'wolf' | 'zombie' | 'skeleton' | 'bear' | 'boss_spectre' | 'scorpion' | 'mummy' | 'desert_snake';
 
 export type AnimalType = 'cow' | 'chicken' | 'rabbit' | 'pig' | 'deer' | 'fox';
 
@@ -191,6 +191,7 @@ export interface Projectile {
   damage: number;
   isEnemy: boolean;
   lifespan: number;
+  projectileType?: 'arrow' | 'bullet_pistol' | 'bullet_rifle';
 }
 
 export interface LootDrop {
@@ -217,6 +218,7 @@ export interface StructureEntity {
     | 'bed' 
     | 'well' 
     | 'workbench' 
+    | 'weapon_workbench'
     | 'sawmill'
     | 'anvil'
     | 'raft'
@@ -260,6 +262,8 @@ export interface ResourceNode {
     | 'oak_tree'
     | 'snowy_pine'
     | 'willow_tree'
+    | 'acacia_tree'
+    | 'cactus'
     | 'rock' 
     | 'copper_ore' 
     | 'iron_ore' 

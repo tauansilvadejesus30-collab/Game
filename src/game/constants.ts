@@ -1,8 +1,8 @@
 import { ItemDef, Recipe, SkillNode, Quest } from './types';
 
 export const TILE_SIZE = 48;
-export const WORLD_WIDTH_TILES = 180;
-export const WORLD_HEIGHT_TILES = 180;
+export const WORLD_WIDTH_TILES = 220;
+export const WORLD_HEIGHT_TILES = 220;
 export const WORLD_PIXEL_WIDTH = WORLD_WIDTH_TILES * TILE_SIZE;
 export const WORLD_PIXEL_HEIGHT = WORLD_HEIGHT_TILES * TILE_SIZE;
 
@@ -19,6 +19,7 @@ export const TILE_TYPES = {
   SNOW_GROUND: 9,
   CAVE_GROUND: 10,
   CAVE_WALL: 11,
+  SAVANNA_GRASS: 12,
 } as const;
 
 export const ITEMS: Record<string, ItemDef> = {
@@ -120,6 +121,55 @@ export const ITEMS: Record<string, ItemDef> = {
     maxStack: 64,
     icon: '➹',
     damage: 20,
+  },
+  pistol: {
+    id: 'pistol',
+    name: 'Pistola Tática 9mm',
+    description: 'Arma de fogo de disparo rápido e boa precisão. Requer Munição 9mm para disparar.',
+    category: 'weapon',
+    stackable: false,
+    maxStack: 1,
+    icon: '🔫',
+    toolType: 'gun',
+    damage: 48,
+  },
+  rifle: {
+    id: 'rifle',
+    name: 'Rifle de Caça .308',
+    description: 'Rifle militar de precisão com altíssimo poder de perfuração. Requer Cartucho .308.',
+    category: 'weapon',
+    stackable: false,
+    maxStack: 1,
+    icon: '🎯',
+    toolType: 'gun',
+    damage: 95,
+  },
+  gunpowder: {
+    id: 'gunpowder',
+    name: 'Pólvora Negra',
+    description: 'Composto químico pirotécnico e propelente para armas de fogo.',
+    category: 'resource',
+    stackable: true,
+    maxStack: 64,
+    icon: '🧂',
+  },
+  pistol_ammo: {
+    id: 'pistol_ammo',
+    name: 'Munição 9mm',
+    description: 'Cartuchos encamisados para pistola tática.',
+    category: 'resource',
+    stackable: true,
+    maxStack: 64,
+    icon: '🔸',
+  },
+  rifle_ammo: {
+    id: 'rifle_ammo',
+    name: 'Cartucho .308',
+    description: 'Munição de fuzil pesado de alta velocidade.',
+    category: 'resource',
+    stackable: true,
+    maxStack: 48,
+    icon: '🔻',
   },
   wooden_hoe: {
     id: 'wooden_hoe',
@@ -1080,6 +1130,64 @@ export const ITEMS: Record<string, ItemDef> = {
     icon: '🛠️',
     placeableStructureId: 'workbench',
   },
+  weapon_workbench_item: {
+    id: 'weapon_workbench_item',
+    name: 'Bancada de Armas',
+    description: 'Bancada militar especializada para forjar pistolas, rifles e produzir munições.',
+    category: 'building',
+    stackable: true,
+    maxStack: 4,
+    icon: '🔫',
+    placeableStructureId: 'weapon_workbench',
+  },
+  scorpion_stinger: {
+    id: 'scorpion_stinger',
+    name: 'Ferrão de Escorpião',
+    description: 'Ferrão venenoso e rígido retirado de escorpiões do deserto.',
+    category: 'resource',
+    stackable: true,
+    maxStack: 32,
+    icon: '🦂',
+  },
+  ancient_cloth: {
+    id: 'ancient_cloth',
+    name: 'Linho Antigo de Tumba',
+    description: 'Bandagens milenares de linho encontradas com múmias no deserto.',
+    category: 'resource',
+    stackable: true,
+    maxStack: 48,
+    icon: '📜',
+  },
+  snake_venom: {
+    id: 'snake_venom',
+    name: 'Veneno de Serpente',
+    description: 'Glândula de veneno potente de cascavel do deserto.',
+    category: 'resource',
+    stackable: true,
+    maxStack: 32,
+    icon: '🧪',
+  },
+  cactus_fruit: {
+    id: 'cactus_fruit',
+    name: 'Figo da Índia (Cacto)',
+    description: 'Fruto doce e refrescante colhido de cactos. Restaura fome e muita sede!',
+    category: 'food',
+    stackable: true,
+    maxStack: 30,
+    icon: '🌵',
+    hunger: 18,
+    thirst: 30,
+    health: 6,
+  },
+  acacia_wood: {
+    id: 'acacia_wood',
+    name: 'Tronco de Acácia',
+    description: 'Madeira densa avermelhada cortada das árvores da savana.',
+    category: 'resource',
+    stackable: true,
+    maxStack: 64,
+    icon: '🪵',
+  },
   sawmill_item: {
     id: 'sawmill_item',
     name: 'Mesa de Carpintaria',
@@ -1182,6 +1290,73 @@ export const RECIPES: Recipe[] = [
       { itemId: 'stone', quantity: 4 },
     ],
     category: 'building',
+  },
+  {
+    id: 'craft_weapon_workbench',
+    outputItemId: 'weapon_workbench_item',
+    outputQuantity: 1,
+    ingredients: [
+      { itemId: 'wood_plank', quantity: 6 },
+      { itemId: 'iron_ingot', quantity: 4 },
+      { itemId: 'stone', quantity: 4 },
+    ],
+    category: 'building',
+    requiresStation: 'workbench',
+  },
+  {
+    id: 'craft_gunpowder',
+    outputItemId: 'gunpowder',
+    outputQuantity: 2,
+    ingredients: [
+      { itemId: 'coal', quantity: 2 },
+      { itemId: 'stone', quantity: 2 },
+    ],
+    category: 'survival',
+  },
+  {
+    id: 'craft_pistol',
+    outputItemId: 'pistol',
+    outputQuantity: 1,
+    ingredients: [
+      { itemId: 'iron_ingot', quantity: 6 },
+      { itemId: 'wood_plank', quantity: 3 },
+    ],
+    category: 'weapons',
+    requiresStation: 'weapon_workbench',
+  },
+  {
+    id: 'craft_rifle',
+    outputItemId: 'rifle',
+    outputQuantity: 1,
+    ingredients: [
+      { itemId: 'iron_ingot', quantity: 10 },
+      { itemId: 'wood_plank', quantity: 6 },
+      { itemId: 'gold_ingot', quantity: 1 },
+    ],
+    category: 'weapons',
+    requiresStation: 'weapon_workbench',
+  },
+  {
+    id: 'craft_pistol_ammo',
+    outputItemId: 'pistol_ammo',
+    outputQuantity: 8,
+    ingredients: [
+      { itemId: 'iron_ingot', quantity: 1 },
+      { itemId: 'gunpowder', quantity: 1 },
+    ],
+    category: 'weapons',
+    requiresStation: 'weapon_workbench',
+  },
+  {
+    id: 'craft_rifle_ammo',
+    outputItemId: 'rifle_ammo',
+    outputQuantity: 6,
+    ingredients: [
+      { itemId: 'iron_ingot', quantity: 2 },
+      { itemId: 'gunpowder', quantity: 2 },
+    ],
+    category: 'weapons',
+    requiresStation: 'weapon_workbench',
   },
   {
     id: 'craft_torch',

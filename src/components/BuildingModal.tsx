@@ -17,6 +17,7 @@ export const BuildingModal: React.FC<BuildingModalProps> = ({
 }) => {
   const buildables = [
     { id: 'workbench', itemId: 'workbench_item', name: 'Bancada de Trabalho', icon: '🛠️', desc: 'Estação principal para fabricar ferramentas avançadas e equipamentos.' },
+    { id: 'weapon_workbench', itemId: 'weapon_workbench_item', name: 'Bancada de Armas', icon: '🔫', desc: 'Estação bélica para forjar pistolas 9mm, rifles de caça e prensar munições.' },
     { id: 'sawmill', itemId: 'sawmill_item', name: 'Mesa de Carpintaria', icon: '🪚', desc: 'Processa toras brutas em tábuas nobres e peças para barcos.' },
     { id: 'furnace', itemId: 'furnace_item', name: 'Fornalha de Pedra', icon: '♨️', desc: 'Fundição para transformar minérios brutos em barras metálicas puras.' },
     { id: 'anvil', itemId: 'anvil_item', name: 'Bigorna Pesada', icon: '⚓', desc: 'Forja equipamentos resistentes de ferro, ouro e diamante.' },

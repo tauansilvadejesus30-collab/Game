@@ -106,6 +106,16 @@ export const HUD: React.FC<HUDProps> = ({
       ? Cloud 
       : Sun;
 
+  // Active Equipped Firearm Detection
+  const selectedSlot = inventory[selectedHotbarIndex];
+  const isGun = selectedSlot && (selectedSlot.item.id === 'pistol' || selectedSlot.item.id === 'rifle');
+  const ammoCount = isGun ? inventory.reduce((total, s) => {
+    if (s && s.item.id === (selectedSlot.item.id === 'pistol' ? 'pistol_ammo' : 'rifle_ammo')) {
+      return total + s.quantity;
+    }
+    return total;
+  }, 0) : 0;
+
   // True Multi-Touch Joystick Handlers (Tracks touch.identifier)
   const handleJoystickTouchStart = (e: React.TouchEvent) => {
     e.preventDefault();
@@ -203,8 +213,8 @@ export const HUD: React.FC<HUDProps> = ({
         {/* 5 Survival Meters (Compact 16-bit style) */}
         <div className="flex flex-col gap-0.5 w-28 sm:w-36 md:w-44 text-[9px] sm:text-[10px] font-bold">
           {/* 1. Health (Red) */}
-          <div className="flex items-center gap-1 bg-[#10121d]/90 px-1.5 py-0.2 rounded border border-[#2b2e42] shadow">
-            <Heart className="w-3 h-3 text-red-500 fill-red-500 shrink-0" />
+          <div className={`flex items-center gap-1 bg-[#10121d]/90 px-1.5 py-0.2 rounded border shadow transition-colors ${stats.hp <= 25 ? 'border-red-500 animate-pulse bg-red-950/50' : 'border-[#2b2e42]'}`}>
+            <Heart className={`w-3 h-3 text-red-500 fill-red-500 shrink-0 ${stats.hp <= 25 ? 'animate-bounce' : ''}`} />
             <div className="w-full bg-[#30161a] h-2 rounded-sm overflow-hidden relative border border-[#4a181f]">
               <div 
                 className="h-full bg-gradient-to-r from-red-600 to-rose-400 transition-all duration-300"
@@ -217,7 +227,7 @@ export const HUD: React.FC<HUDProps> = ({
           </div>
 
           {/* 2. Hunger (Orange) */}
-          <div className="flex items-center gap-1 bg-[#10121d]/90 px-1.5 py-0.2 rounded border border-[#2b2e42] shadow">
+          <div className={`flex items-center gap-1 bg-[#10121d]/90 px-1.5 py-0.2 rounded border shadow transition-colors ${stats.hunger <= 15 ? 'border-amber-500 animate-pulse bg-amber-950/50' : 'border-[#2b2e42]'}`}>
             <Utensils className="w-3 h-3 text-amber-500 shrink-0" />
             <div className="w-full bg-[#332212] h-2 rounded-sm overflow-hidden relative border border-[#523315]">
               <div 
@@ -231,7 +241,7 @@ export const HUD: React.FC<HUDProps> = ({
           </div>
 
           {/* 3. Thirst (Cyan) */}
-          <div className="flex items-center gap-1 bg-[#10121d]/90 px-1.5 py-0.2 rounded border border-[#2b2e42] shadow">
+          <div className={`flex items-center gap-1 bg-[#10121d]/90 px-1.5 py-0.2 rounded border shadow transition-colors ${stats.thirst <= 15 ? 'border-cyan-400 animate-pulse bg-cyan-950/50' : 'border-[#2b2e42]'}`}>
             <Droplets className="w-3 h-3 text-cyan-400 shrink-0" />
             <div className="w-full bg-[#122838] h-2 rounded-sm overflow-hidden relative border border-[#19405c]">
               <div 
@@ -259,7 +269,7 @@ export const HUD: React.FC<HUDProps> = ({
           </div>
 
           {/* 5. Temperature (Purple / 36°C) */}
-          <div className="flex items-center gap-1 bg-[#10121d]/90 px-1.5 py-0.2 rounded border border-[#2b2e42] shadow">
+          <div className={`flex items-center gap-1 bg-[#10121d]/90 px-1.5 py-0.2 rounded border shadow transition-colors ${(stats.bodyTemp < 24 || stats.bodyTemp > 41) ? 'border-orange-500 animate-pulse bg-orange-950/50' : 'border-[#2b2e42]'}`}>
             <Thermometer className="w-3 h-3 text-purple-400 shrink-0" />
             <div className="w-full bg-[#2b1636] h-2 rounded-sm overflow-hidden relative border border-[#48205c]">
               <div 
@@ -535,11 +545,26 @@ export const HUD: React.FC<HUDProps> = ({
             e.stopPropagation();
             onAttack();
           }}
-          className="w-13 h-13 sm:w-15 sm:h-15 bg-gradient-to-tr from-red-700 to-rose-500 hover:from-red-600 hover:to-rose-400 active:scale-90 border-2 border-yellow-400 rounded-full flex flex-col items-center justify-center shadow-[0_0_16px_rgba(239,68,68,0.6)] cursor-pointer"
-          title="Atacar / Interagir (Espaço / Toque)"
+          className={`w-13 h-13 sm:w-15 sm:h-15 active:scale-90 border-2 rounded-full flex flex-col items-center justify-center cursor-pointer transition-all ${
+            isGun
+              ? 'bg-gradient-to-tr from-amber-700 to-yellow-500 hover:from-amber-600 hover:to-yellow-400 border-yellow-300 shadow-[0_0_18px_rgba(245,158,11,0.7)]'
+              : 'bg-gradient-to-tr from-red-700 to-rose-500 hover:from-red-600 hover:to-rose-400 border-yellow-400 shadow-[0_0_16px_rgba(239,68,68,0.6)]'
+          }`}
+          title={isGun ? `Disparar Arma (${ammoCount} munições restantes)` : "Atacar / Interagir (Espaço / Toque)"}
         >
-          <Swords className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
-          <span className="text-[7px] sm:text-[8px] font-bold text-yellow-200 font-pixel mt-0.5">AÇÃO</span>
+          {isGun ? (
+            <>
+              <span className="text-xl sm:text-2xl leading-none select-none">🔫</span>
+              <span className="text-[7px] sm:text-[8px] font-bold text-yellow-100 font-pixel mt-0.5 tabular-nums drop-shadow-[0_1px_2px_rgba(0,0,0,1)]">
+                {ammoCount} BALAS
+              </span>
+            </>
+          ) : (
+            <>
+              <Swords className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
+              <span className="text-[7px] sm:text-[8px] font-bold text-yellow-200 font-pixel mt-0.5">AÇÃO</span>
+            </>
+          )}
         </button>
       </div>
     </div>

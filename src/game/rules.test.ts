@@ -193,4 +193,80 @@ test('canDismantleWithTool requires a hammer tool', () => {
   assert.equal(canDismantleWithTool({ id: 'iron_hammer', toolType: 'hammer' }), true, 'Iron hammer can dismantle structures');
 });
 
+test('placeable items have valid structure IDs and crafting recipes', () => {
+  const campfire = ITEMS.campfire_item;
+  assert.equal(campfire.placeableStructureId, 'campfire', 'Campfire item places campfire');
+
+  const workbench = ITEMS.workbench_item;
+  assert.equal(workbench.placeableStructureId, 'workbench', 'Workbench item places workbench');
+
+  const chest = ITEMS.chest_item;
+  assert.equal(chest.placeableStructureId, 'chest', 'Chest item places chest');
+
+  // Verify recipes exist for them
+  const craftCampfire = RECIPES.find(r => r.outputItemId === 'campfire_item');
+  assert.ok(craftCampfire, 'Campfire has craft recipe');
+
+  const craftWorkbench = RECIPES.find(r => r.outputItemId === 'workbench_item');
+  assert.ok(craftWorkbench, 'Workbench has craft recipe');
+
+  const craftWeaponWorkbench = RECIPES.find(r => r.outputItemId === 'weapon_workbench_item');
+  assert.ok(craftWeaponWorkbench, 'Weapon workbench has craft recipe');
+  assert.equal(craftWeaponWorkbench.requiresStation, 'workbench', 'Weapon workbench requires standard workbench to construct');
+});
+
+test('firearm and ammunition crafting requires weapon_workbench station', () => {
+  const pistolRecipe = RECIPES.find(r => r.id === 'craft_pistol')!;
+  const rifleRecipe = RECIPES.find(r => r.id === 'craft_rifle')!;
+  const pistolAmmoRecipe = RECIPES.find(r => r.id === 'craft_pistol_ammo')!;
+  const rifleAmmoRecipe = RECIPES.find(r => r.id === 'craft_rifle_ammo')!;
+
+  assert.equal(pistolRecipe.requiresStation, 'weapon_workbench');
+  assert.equal(rifleRecipe.requiresStation, 'weapon_workbench');
+  assert.equal(pistolAmmoRecipe.requiresStation, 'weapon_workbench');
+  assert.equal(rifleAmmoRecipe.requiresStation, 'weapon_workbench');
+
+  const fullMetalInventory: (InventorySlot | null)[] = [
+    { item: ITEMS.iron_ingot, quantity: 20 },
+    { item: ITEMS.wood_plank, quantity: 15 },
+    { item: ITEMS.gold_ingot, quantity: 2 },
+    { item: ITEMS.gunpowder, quantity: 10 },
+  ];
+
+  // Without weapon_workbench nearby: cannot craft guns or bullets
+  assert.equal(canCraftRecipe(fullMetalInventory, pistolRecipe, ['workbench']), false);
+  assert.equal(canCraftRecipe(fullMetalInventory, pistolAmmoRecipe, ['workbench']), false);
+
+  // Near weapon_workbench: crafts pistol, rifle, and ammunition!
+  assert.equal(canCraftRecipe(fullMetalInventory, pistolRecipe, ['workbench', 'weapon_workbench']), true);
+  assert.equal(canCraftRecipe(fullMetalInventory, rifleRecipe, ['workbench', 'weapon_workbench']), true);
+  assert.equal(canCraftRecipe(fullMetalInventory, pistolAmmoRecipe, ['workbench', 'weapon_workbench']), true);
+  assert.equal(canCraftRecipe(fullMetalInventory, rifleAmmoRecipe, ['workbench', 'weapon_workbench']), true);
+});
+
+test('savanna biome maintains appropriate daytime and night temperature', () => {
+  const dayTemp = calculateTargetTemperature({
+    isNight: false,
+    isRaining: false,
+    biome: 'savanna',
+    nearCampfire: false,
+    nearTorch: false,
+    insideCabin: false,
+    equippedArmorDefense: 0,
+  });
+  assert.equal(dayTemp, 38, 'Savanna day is warm');
+
+  const nightTemp = calculateTargetTemperature({
+    isNight: true,
+    isRaining: false,
+    biome: 'savanna',
+    nearCampfire: false,
+    nearTorch: false,
+    insideCabin: false,
+    equippedArmorDefense: 0,
+  });
+  assert.equal(nightTemp, 26, 'Savanna night cools down to 26C');
+});
+
+
 

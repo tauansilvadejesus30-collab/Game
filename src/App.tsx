@@ -193,6 +193,16 @@ export default function App() {
     if (!slot) return;
     const item = slot.item;
 
+    if (item.placeableStructureId) {
+      engineRef.current.isBuildingMode = true;
+      engineRef.current.selectedBuildingStructureId = item.placeableStructureId;
+      setActiveModal(null);
+      soundEngine.playBuild();
+      engineRef.current.addFloatingText(engineRef.current.player.x, engineRef.current.player.y - 20, 'Modo Construção: Clique para posicionar!', '#4ade80');
+      forceUpdate();
+      return;
+    }
+
     if (item.hunger) engineRef.current.player.stats.hunger = Math.min(engineRef.current.player.stats.maxHunger, engineRef.current.player.stats.hunger + item.hunger);
     if (item.thirst) engineRef.current.player.stats.thirst = Math.min(engineRef.current.player.stats.maxThirst, engineRef.current.player.stats.thirst + item.thirst);
     if (item.energy) engineRef.current.player.stats.energy = Math.min(engineRef.current.player.stats.maxEnergy, engineRef.current.player.stats.energy + item.energy);
@@ -460,6 +470,13 @@ export default function App() {
           onSplitStack={handleSplitStack}
           onSwapSlots={handleSwapSlots}
           onOrganize={handleOrganizeInventory}
+          onStartBuilding={(structureId) => {
+            engine.isBuildingMode = true;
+            engine.selectedBuildingStructureId = structureId;
+            setActiveModal(null);
+            soundEngine.playBuild();
+            engine.addFloatingText(engine.player.x, engine.player.y - 20, 'Modo Construção: Clique para posicionar!', '#4ade80');
+          }}
         />
       )}
 

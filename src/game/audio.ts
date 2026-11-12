@@ -39,6 +39,9 @@ class SoundEngine {
   private windGain: GainNode | null = null;
   private rainNode: AudioBufferSourceNode | null = null;
   private rainGain: GainNode | null = null;
+  private oceanNode: AudioBufferSourceNode | null = null;
+  private oceanGain: GainNode | null = null;
+  private oceanFilter: BiquadFilterNode | null = null;
 
   // Cached noise buffers for realistic physical synthesis
   private pinkNoiseBuffer: AudioBuffer | null = null;
@@ -65,9 +68,9 @@ class SoundEngine {
       this.musicGain.gain.setValueAtTime(this.musicVolume, this.ctx.currentTime);
       this.musicGain.connect(this.masterGain);
 
-      // Ambience Bus (wind, birds, rain, crickets)
+      // Ambience Bus (wind, birds, rain, crickets, ocean)
       this.ambienceGain = this.ctx.createGain();
-      this.ambienceGain.gain.setValueAtTime(0.35, this.ctx.currentTime);
+      this.ambienceGain.gain.setValueAtTime(0.38, this.ctx.currentTime);
       this.ambienceGain.connect(this.masterGain);
 
       // Realistic Outdoor Natural Convolver Reverb (2.4s decay with forest acoustic absorption)
@@ -84,8 +87,9 @@ class SoundEngine {
       this.pinkNoiseBuffer = this.createPinkNoiseBuffer(this.ctx, 3.0);
       this.brownNoiseBuffer = this.createBrownNoiseBuffer(this.ctx, 3.0);
 
-      // Start continuous gentle background wind
+      // Start continuous gentle background wind & ocean waves
       this.startWindAmbience();
+      this.startOceanAmbience();
     }
 
     if (this.ctx.state === 'suspended') {
@@ -218,6 +222,57 @@ class SoundEngine {
 
     this.windNode.start();
     lfo.start();
+  }
+
+  // --- Ocean Wave Environmental Audio (Louder near sea/coastal waters) ---
+  private startOceanAmbience() {
+    if (!this.ctx || !this.ambienceGain || !this.pinkNoiseBuffer) return;
+
+    this.oceanNode = this.ctx.createBufferSource();
+    this.oceanNode.buffer = this.pinkNoiseBuffer;
+    this.oceanNode.loop = true;
+
+    this.oceanFilter = this.ctx.createBiquadFilter();
+    this.oceanFilter.type = 'lowpass';
+    this.oceanFilter.frequency.setValueAtTime(360, this.ctx.currentTime);
+    this.oceanFilter.Q.setValueAtTime(2.2, this.ctx.currentTime);
+
+    // LFO for rhythmic ocean swells (~8.5s wave cycle)
+    const waveLfo = this.ctx.createOscillator();
+    waveLfo.type = 'sine';
+    waveLfo.frequency.setValueAtTime(0.12, this.ctx.currentTime);
+
+    const waveFilterMod = this.ctx.createGain();
+    waveFilterMod.gain.setValueAtTime(320, this.ctx.currentTime);
+    waveLfo.connect(waveFilterMod);
+    waveFilterMod.connect(this.oceanFilter.frequency);
+
+    this.oceanGain = this.ctx.createGain();
+    this.oceanGain.gain.setValueAtTime(0, this.ctx.currentTime);
+
+    this.oceanNode.connect(this.oceanFilter);
+    this.oceanFilter.connect(this.oceanGain);
+    this.oceanGain.connect(this.ambienceGain);
+
+    this.oceanNode.start();
+    waveLfo.start();
+  }
+
+  /**
+   * Dynamically adjusts ocean wave ambient volume based on proximity to nearest ocean/water tile
+   * @param dist Distance in pixels to the nearest ocean/deep water tile
+   */
+  public updateOceanWaves(dist: number) {
+    this.initContext();
+    if (!this.ctx || !this.oceanGain || this.isMuted) return;
+
+    // Max audible range: 750 pixels (~15-16 tiles)
+    const maxRange = 750;
+    const proximity = Math.max(0, Math.min(1, 1 - dist / maxRange));
+    // Gentle exponential curve: serene rumble at mid distance, full breaking surf up close
+    const targetGain = Math.pow(proximity, 1.8) * 0.42;
+
+    this.oceanGain.gain.setTargetAtTime(targetGain, this.ctx.currentTime, 0.35);
   }
 
   // --- Rain Weather Audio ---
@@ -580,6 +635,160 @@ class SoundEngine {
       whoosh.start(t + 0.01);
       whoosh.stop(t + 0.19);
     }
+  }
+
+  // --- Realistic 9mm Pistol Gunshot (Crisp mechanical snap, gunpowder blast, supersonic crack) ---
+  public playPistolShot() {
+    this.initContext();
+    if (!this.ctx || !this.sfxGain || this.isMuted) return;
+
+    const t = this.ctx.currentTime;
+
+    // 1. Initial Gunpowder Blast (Bandpass filtered white noise burst)
+    if (this.whiteNoiseBuffer) {
+      const blast = this.ctx.createBufferSource();
+      blast.buffer = this.whiteNoiseBuffer;
+
+      const blastFilter = this.ctx.createBiquadFilter();
+      blastFilter.type = 'bandpass';
+      blastFilter.frequency.setValueAtTime(1400, t);
+      blastFilter.frequency.exponentialRampToValueAtTime(320, t + 0.14);
+      blastFilter.Q.setValueAtTime(2.2, t);
+
+      const blastGain = this.ctx.createGain();
+      blastGain.gain.setValueAtTime(0.48, t);
+      blastGain.gain.exponentialRampToValueAtTime(0.005, t + 0.15);
+
+      blast.connect(blastFilter);
+      blastFilter.connect(blastGain);
+      blastGain.connect(this.sfxGain);
+
+      if (this.convolver && this.reverbGain) {
+        const revSend = this.ctx.createGain();
+        revSend.gain.setValueAtTime(0.2, t);
+        blastGain.connect(revSend);
+        revSend.connect(this.convolver);
+      }
+
+      blast.start(t);
+      blast.stop(t + 0.16);
+    }
+
+    // 2. Heavy Sub-bass Thump / Chamber recoil
+    const thump = this.ctx.createOscillator();
+    const thumpGain = this.ctx.createGain();
+    thump.type = 'triangle';
+    thump.frequency.setValueAtTime(220, t);
+    thump.frequency.exponentialRampToValueAtTime(45, t + 0.09);
+    thumpGain.gain.setValueAtTime(0.42, t);
+    thumpGain.gain.exponentialRampToValueAtTime(0.005, t + 0.10);
+
+    thump.connect(thumpGain);
+    thumpGain.connect(this.sfxGain);
+    thump.start(t);
+    thump.stop(t + 0.11);
+
+    // 3. Mechanical slide cycling click
+    const slide = this.ctx.createOscillator();
+    const slideGain = this.ctx.createGain();
+    slide.type = 'square';
+    slide.frequency.setValueAtTime(1800, t + 0.08);
+    slide.frequency.exponentialRampToValueAtTime(600, t + 0.13);
+    slideGain.gain.setValueAtTime(0.001, t);
+    slideGain.gain.setValueAtTime(0.12, t + 0.08);
+    slideGain.gain.exponentialRampToValueAtTime(0.005, t + 0.14);
+
+    slide.connect(slideGain);
+    slideGain.connect(this.sfxGain);
+    slide.start(t + 0.08);
+    slide.stop(t + 0.15);
+  }
+
+  // --- Realistic .308 Hunting Rifle Gunshot (Thunderous blast, sonic boom, environmental valley echo) ---
+  public playRifleShot() {
+    this.initContext();
+    if (!this.ctx || !this.sfxGain || this.isMuted) return;
+
+    const t = this.ctx.currentTime;
+
+    // 1. Violent High-Caliber Muzzle Blast
+    if (this.whiteNoiseBuffer) {
+      const blast = this.ctx.createBufferSource();
+      blast.buffer = this.whiteNoiseBuffer;
+
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(2600, t);
+      filter.frequency.exponentialRampToValueAtTime(180, t + 0.28);
+      filter.Q.setValueAtTime(1.8, t);
+
+      const blastGain = this.ctx.createGain();
+      blastGain.gain.setValueAtTime(0.65, t);
+      blastGain.gain.exponentialRampToValueAtTime(0.002, t + 0.32);
+
+      blast.connect(filter);
+      filter.connect(blastGain);
+      blastGain.connect(this.sfxGain);
+
+      // Deep valley echo through outdoor convolver
+      if (this.convolver && this.reverbGain) {
+        const revSend = this.ctx.createGain();
+        revSend.gain.setValueAtTime(0.38, t);
+        blastGain.connect(revSend);
+        revSend.connect(this.convolver);
+      }
+
+      blast.start(t);
+      blast.stop(t + 0.34);
+    }
+
+    // 2. Powerful Subsonic Concussion Thud
+    const thump = this.ctx.createOscillator();
+    const thumpGain = this.ctx.createGain();
+    thump.type = 'sine';
+    thump.frequency.setValueAtTime(140, t);
+    thump.frequency.exponentialRampToValueAtTime(30, t + 0.22);
+    thumpGain.gain.setValueAtTime(0.55, t);
+    thumpGain.gain.exponentialRampToValueAtTime(0.005, t + 0.24);
+
+    thump.connect(thumpGain);
+    thumpGain.connect(this.sfxGain);
+    thump.start(t);
+    thump.stop(t + 0.25);
+
+    // 3. High-velocity supersonic bullet crack
+    const crack = this.ctx.createOscillator();
+    const crackGain = this.ctx.createGain();
+    crack.type = 'sawtooth';
+    crack.frequency.setValueAtTime(3200, t);
+    crack.frequency.exponentialRampToValueAtTime(450, t + 0.06);
+    crackGain.gain.setValueAtTime(0.3, t);
+    crackGain.gain.exponentialRampToValueAtTime(0.002, t + 0.07);
+
+    crack.connect(crackGain);
+    crackGain.connect(this.sfxGain);
+    crack.start(t);
+    crack.stop(t + 0.08);
+  }
+
+  // --- Empty Gun Trigger Click ---
+  public playEmptyGun() {
+    this.initContext();
+    if (!this.ctx || !this.sfxGain || this.isMuted) return;
+
+    const t = this.ctx.currentTime;
+    const click = this.ctx.createOscillator();
+    const clickGain = this.ctx.createGain();
+    click.type = 'triangle';
+    click.frequency.setValueAtTime(1400, t);
+    click.frequency.exponentialRampToValueAtTime(600, t + 0.035);
+    clickGain.gain.setValueAtTime(0.2, t);
+    clickGain.gain.exponentialRampToValueAtTime(0.005, t + 0.04);
+
+    click.connect(clickGain);
+    clickGain.connect(this.sfxGain);
+    click.start(t);
+    click.stop(t + 0.045);
   }
 
   // 6. Realistic Flesh Impact (Blunt Force Body Hit + Wet Squelch)

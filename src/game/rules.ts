@@ -29,7 +29,7 @@ export function calculateDamage(
 export function calculateTargetTemperature(params: {
   isNight: boolean;
   isRaining: boolean;
-  biome: 'forest' | 'beach' | 'mountain' | 'desert' | 'ruins' | 'snow';
+  biome: 'forest' | 'beach' | 'mountain' | 'desert' | 'ruins' | 'snow' | 'savanna';
   nearCampfire: boolean;
   nearTorch: boolean;
   insideCabin: boolean;
@@ -56,6 +56,8 @@ export function calculateTargetTemperature(params: {
   // Biome base effect
   if (biome === 'desert') {
     ambient = isNight ? 28 : 41;
+  } else if (biome === 'savanna') {
+    ambient = isNight ? 26 : 38;
   } else if (biome === 'mountain') {
     ambient = isNight ? 22 : 31;
   } else if (biome === 'snow') {
@@ -208,10 +210,11 @@ export function updateSurvivalStats(
   }
 ): PlayerStats {
   const metabolismModifier = options.hasMetabolismSkill ? 0.7 : 1.0;
-  const hungerDrainRate = 0.3 * metabolismModifier; // hunger points per second
-  const thirstDrainRate = 0.5 * metabolismModifier; // thirst points per second
-  const sprintEnergyDrain = options.isSprinting ? 12 : 0;
-  const restingEnergyRegen = options.isResting ? 8 : 1.5;
+  // Fair survival drain: ~20 mins of thirst, ~33 mins of hunger
+  const hungerDrainRate = 0.05 * metabolismModifier; // hunger points per second
+  const thirstDrainRate = 0.08 * metabolismModifier; // thirst points per second
+  const sprintEnergyDrain = options.isSprinting ? 10 : 0;
+  const restingEnergyRegen = options.isResting ? 10 : 2.5;
 
   let newHunger = Math.max(0, stats.hunger - hungerDrainRate * dt);
   let newThirst = Math.max(0, stats.thirst - thirstDrainRate * dt);
@@ -225,24 +228,24 @@ export function updateSurvivalStats(
 
   let newHp = stats.hp;
 
-  // Starvation & Dehydration penalties
+  // Gentle starvation & dehydration penalties giving ample warning to player
   if (newHunger <= 0) {
-    newHp = Math.max(0, newHp - 2.5 * dt);
+    newHp = Math.max(0, newHp - 0.35 * dt);
   }
   if (newThirst <= 0) {
-    newHp = Math.max(0, newHp - 4.0 * dt);
+    newHp = Math.max(0, newHp - 0.5 * dt);
   }
 
-  // Freezing penalty (hypothermia < 32°C) or Overheating (> 40°C)
+  // Extreme cold (< 22°C, only deep snowy blizzards or unheated frozen nights) or severe heatwave (> 42.5°C)
   const temp = options.currentTemperature ?? stats.bodyTemp;
-  if (temp < 30.0) {
-    newHp = Math.max(0, newHp - 3.0 * dt);
-  } else if (temp > 41.5) {
-    newHp = Math.max(0, newHp - 2.5 * dt);
+  if (temp < 22.0) {
+    newHp = Math.max(0, newHp - 0.4 * dt);
+  } else if (temp > 42.5) {
+    newHp = Math.max(0, newHp - 0.4 * dt);
   }
 
-  // Natural health regeneration when well fed and hydrated
-  if (newHunger > 75 && newThirst > 65 && temp >= 34.0 && temp <= 38.0) {
+  // Natural health regeneration when fed, hydrated, and at comfortable body temperature
+  if (newHunger > 60 && newThirst > 50 && temp >= 28.0 && temp <= 39.0) {
     newHp = Math.min(stats.maxHp, newHp + 1.2 * dt);
   }
 

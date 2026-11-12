@@ -14,6 +14,7 @@ interface InventoryModalProps {
   onSplitStack: (slotIndex: number) => void;
   onSwapSlots?: (fromIndex: number, toIndex: number) => void;
   onOrganize?: () => void;
+  onStartBuilding?: (structureId: string) => void;
 }
 
 export const InventoryModal: React.FC<InventoryModalProps> = ({
@@ -27,6 +28,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
   onSplitStack,
   onSwapSlots,
   onOrganize,
+  onStartBuilding,
 }) => {
   const [selectedSlotIndex, setSelectedSlotIndex] = useState<number | null>(0);
   const [movingFromIndex, setMovingFromIndex] = useState<number | null>(null);
@@ -265,6 +267,20 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
 
                 {/* Actions */}
                 <div className="flex flex-col gap-2 mt-2">
+                  {selectedSlot.item.placeableStructureId && (
+                    <button
+                      onClick={() => {
+                        if (selectedSlot.item.placeableStructureId) {
+                          soundEngine.playBuild();
+                          onStartBuilding?.(selectedSlot.item.placeableStructureId);
+                        }
+                      }}
+                      className="w-full py-2 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 font-bold text-xs rounded-lg text-white shadow cursor-pointer active:scale-95 flex items-center justify-center gap-1.5 border border-emerald-400/50"
+                    >
+                      <Sparkles className="w-4 h-4 text-emerald-200" /> Posicionar no Mapa
+                    </button>
+                  )}
+
                   {selectedSlot.item.category === 'food' && (
                     <button
                       onClick={() => selectedSlotIndex !== null && onUseItem(selectedSlotIndex)}

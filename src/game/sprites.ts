@@ -9,6 +9,7 @@ export class SpriteRenderer {
   private dirtCanvas: HTMLCanvasElement;
   private ruinsCanvas: HTMLCanvasElement;
   private snowCanvas: HTMLCanvasElement;
+  private savannaCanvas: HTMLCanvasElement;
 
   constructor() {
     this.grassVariants = this.createGrassTileVariants();
@@ -17,20 +18,21 @@ export class SpriteRenderer {
     this.dirtCanvas = this.createDirtTile();
     this.ruinsCanvas = this.createRuinsTile();
     this.snowCanvas = this.createSnowTile();
+    this.savannaCanvas = this.createSavannaTile();
   }
 
   // --- Tile Generators (Rich 16-Bit Pixel Art) ---
   private createGrassTileVariants(): HTMLCanvasElement[] {
     const variants: HTMLCanvasElement[] = [];
 
-    for (let v = 0; v < 4; v++) {
+    for (let v = 0; v < 6; v++) {
       const c = document.createElement('canvas');
       c.width = TILE_SIZE;
       c.height = TILE_SIZE;
       const ctx = c.getContext('2d')!;
 
       // Rich layered meadow base
-      ctx.fillStyle = v === 2 ? '#3b7822' : '#428526';
+      ctx.fillStyle = v === 2 || v === 4 ? '#3b7822' : '#428526';
       ctx.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
 
       // Deep shadow grass blades
@@ -62,6 +64,7 @@ export class SpriteRenderer {
         ctx.fillRect(12, 16, 2, 2);
         ctx.fillRect(14, 15, 2, 2);
         ctx.fillRect(13, 18, 2, 2);
+        ctx.fillRect(32, 28, 2, 2);
       } else if (v === 1) {
         // Variant 1: White Daisy with yellow center
         ctx.fillStyle = '#ffffff';
@@ -80,6 +83,19 @@ export class SpriteRenderer {
         ctx.fillRect(22, 26, 3, 2);
         ctx.fillStyle = '#786959';
         ctx.fillRect(23, 26, 2, 1);
+      } else if (v === 4) {
+        // Variant 4: Blue Forest Forget-me-nots
+        ctx.fillStyle = '#38bdf8';
+        ctx.fillRect(18, 12, 4, 4);
+        ctx.fillStyle = '#fde047';
+        ctx.fillRect(19, 13, 2, 2);
+      } else if (v === 5) {
+        // Variant 5: Dappled forest moss
+        ctx.fillStyle = '#2f591e';
+        ctx.fillRect(6, 20, 4, 3);
+        ctx.fillRect(36, 12, 5, 3);
+        ctx.fillStyle = '#65a30d';
+        ctx.fillRect(7, 21, 2, 1);
       }
 
       variants.push(c);
@@ -197,9 +213,46 @@ export class SpriteRenderer {
     return c;
   }
 
+  private createSavannaTile(): HTMLCanvasElement {
+    const c = document.createElement('canvas');
+    c.width = TILE_SIZE;
+    c.height = TILE_SIZE;
+    const ctx = c.getContext('2d')!;
+
+    // Sun-baked golden amber savanna loam
+    ctx.fillStyle = '#b59349';
+    ctx.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
+
+    // Warm ochre soil spots
+    ctx.fillStyle = '#9e7d38';
+    ctx.fillRect(4, 6, 8, 4);
+    ctx.fillRect(28, 22, 10, 5);
+    ctx.fillRect(14, 36, 6, 4);
+
+    // Dry golden grass blades
+    ctx.fillStyle = '#d4aa48';
+    ctx.fillRect(8, 12, 2, 6);
+    ctx.fillRect(10, 10, 2, 8);
+    ctx.fillRect(24, 6, 2, 7);
+    ctx.fillRect(36, 28, 2, 8);
+    ctx.fillRect(38, 26, 2, 10);
+    ctx.fillRect(16, 24, 2, 6);
+
+    // Earth pebbles
+    ctx.fillStyle = '#7a5e27';
+    ctx.fillRect(22, 18, 3, 2);
+    ctx.fillRect(6, 32, 2, 2);
+    ctx.fillRect(40, 14, 2, 2);
+
+    return c;
+  }
+
   // --- Draw Tile Function ---
   public drawTile(ctx: CanvasRenderingContext2D, type: number, x: number, y: number, timeMs: number) {
     switch (type) {
+      case TILE_TYPES.SAVANNA_GRASS:
+        ctx.drawImage(this.savannaCanvas, x, y);
+        break;
       case TILE_TYPES.GRASS: {
         const tileIdx = Math.abs(Math.floor(x / TILE_SIZE) * 31 + Math.floor(y / TILE_SIZE) * 17) % this.grassVariants.length;
         ctx.drawImage(this.grassVariants[tileIdx], x, y);
@@ -362,8 +415,9 @@ export class SpriteRenderer {
       ctx.filter = 'brightness(2.5)';
     }
 
-    // Walking vertical bob
-    const walkBob = isMoving ? Math.sin(animFrame * 12) * 2 : 0;
+    // Walking & breathing animation bob
+    const idleBob = isMoving ? 0 : Math.sin(animFrame * 4) * 0.8;
+    const walkBob = (isMoving ? Math.sin(animFrame * 12) * 2 : 0) + idleBob;
     const legOffset = isMoving ? Math.sin(animFrame * 12) * 5 : 0;
 
     const flip = facing === 'left';
@@ -371,77 +425,143 @@ export class SpriteRenderer {
       ctx.scale(-1, 1);
     }
 
-    // 1. Legs / Boots (Omitted/submerged when swimming)
+    // 1. Legs & Boots (Submerged when swimming)
     if (!isSwimming) {
-      ctx.fillStyle = '#1c2638'; // Dark jeans
+      // Jeans with knee seam
+      ctx.fillStyle = '#1e293b'; // Denim blue
       ctx.fillRect(-7, 6 + walkBob, 5, 8 + legOffset);
       ctx.fillRect(2, 6 + walkBob, 5, 8 - legOffset);
+      ctx.fillStyle = '#334155'; // Knee crease
+      ctx.fillRect(-7, 9 + walkBob + legOffset * 0.5, 5, 1.5);
+      ctx.fillRect(2, 9 + walkBob - legOffset * 0.5, 5, 1.5);
 
-      ctx.fillStyle = '#422817'; // Boots
-      ctx.fillRect(-8, 14 + walkBob + legOffset, 6, 4);
-      ctx.fillRect(2, 14 + walkBob - legOffset, 6, 4);
+      // Sturdy Leather Boots with soles
+      ctx.fillStyle = '#451a03'; // Deep brown leather
+      ctx.fillRect(-8, 13 + walkBob + legOffset, 6, 5);
+      ctx.fillRect(2, 13 + walkBob - legOffset, 6, 5);
+      ctx.fillStyle = '#1c1917'; // Rubber sole
+      ctx.fillRect(-8, 17 + walkBob + legOffset, 6, 1.5);
+      ctx.fillRect(2, 17 + walkBob - legOffset, 6, 1.5);
+      ctx.fillStyle = '#d97706'; // Boot lace detail
+      ctx.fillRect(-7, 14 + walkBob + legOffset, 4, 1);
+      ctx.fillRect(3, 14 + walkBob - legOffset, 4, 1);
     }
 
-    // 2. Torso: Red Hoodie Jacket with dark undershirt & white drawstrings (Matching reference image!)
-    ctx.fillStyle = '#c72323'; // Bright vivid red hoodie
+    // 2. Torso: High-Quality Red Hoodie Jacket with Belt and Pouch
+    // Main hoodie body
+    ctx.fillStyle = '#dc2626'; // Vivid crimson red
     ctx.fillRect(-9, -8 + walkBob, 18, 15);
-    // Darker red hoodie trim
-    ctx.fillStyle = '#9e1919';
+    // Darker shadow sides and folds
+    ctx.fillStyle = '#991b1b';
+    ctx.fillRect(-9, -8 + walkBob, 2, 15);
+    ctx.fillRect(7, -8 + walkBob, 2, 15);
     ctx.fillRect(-9, 5 + walkBob, 18, 2);
+
+    // Leather utility belt with brass buckle
+    ctx.fillStyle = '#3e2312';
+    ctx.fillRect(-9, 3 + walkBob, 18, 3);
+    ctx.fillStyle = '#fbbf24'; // Brass buckle
+    ctx.fillRect(-2, 3 + walkBob, 4, 3);
+    ctx.fillStyle = '#1c1917';
+    ctx.fillRect(-1, 4 + walkBob, 2, 1);
+    // Side survival pouch
+    ctx.fillStyle = '#5c3818';
+    ctx.fillRect(6, 4 + walkBob, 3, 4);
+
     // Dark grey undershirt notch
-    ctx.fillStyle = '#222225';
+    ctx.fillStyle = '#1e1e24';
     ctx.fillRect(-3, -7 + walkBob, 6, 6);
+    // Silver zipper pull
+    ctx.fillStyle = '#cbd5e1';
+    ctx.fillRect(-0.5, -5 + walkBob, 1, 6);
     // White drawstrings
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(-2, -2 + walkBob, 1, 5);
     ctx.fillRect(1, -2 + walkBob, 1, 5);
 
-    // 3. Head & Face (Boy with pale skin, bright eyes)
-    ctx.fillStyle = '#ffd1a4'; // Skin tone
+    // 3. Head & Face (Expressive anime aesthetic)
+    ctx.fillStyle = '#ffd5b0'; // Warm skin tone
     ctx.fillRect(-7, -20 + walkBob, 14, 12);
 
     if (facing === 'up') {
-      // Back of head - full spiky black hair
+      // Back of head - full spiky black anime hair with deep violet highlights
       ctx.fillStyle = '#18151c';
       ctx.fillRect(-8, -23 + walkBob, 16, 16);
-      ctx.fillStyle = '#2b2633'; // Hair highlights
-      ctx.fillRect(-5, -21 + walkBob, 10, 4);
+      ctx.fillStyle = '#312e81';
+      ctx.fillRect(-6, -21 + walkBob, 12, 4);
+      ctx.fillStyle = '#4338ca';
+      ctx.fillRect(-4, -19 + walkBob, 8, 2);
     } else {
-      // Eyes
-      ctx.fillStyle = '#111111';
+      // Anime Eyes: Sapphire iris, dark pupil, dual reflection glints
+      // Eye whites
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(-5, -15 + walkBob, 4, 5);
+      ctx.fillRect(1, -15 + walkBob, 4, 5);
+      // Iris & pupil
+      ctx.fillStyle = '#0284c7'; // Sapphire blue iris
       ctx.fillRect(-4, -15 + walkBob, 3, 4);
       ctx.fillRect(2, -15 + walkBob, 3, 4);
-      // Eye glint
+      ctx.fillStyle = '#0f172a'; // Pupil
+      ctx.fillRect(-4, -14 + walkBob, 2, 3);
+      ctx.fillRect(2, -14 + walkBob, 2, 3);
+      // Specular reflections
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(-3, -15 + walkBob, 1, 2);
       ctx.fillRect(3, -15 + walkBob, 1, 2);
 
-      // Messy black anime hair
+      // Eyebrows
+      ctx.fillStyle = '#18151c';
+      ctx.fillRect(-5, -17 + walkBob, 4, 1.5);
+      ctx.fillRect(1, -17 + walkBob, 4, 1.5);
+
+      // Soft cheek blush
+      ctx.fillStyle = 'rgba(248, 113, 113, 0.6)';
+      ctx.fillRect(-6, -10 + walkBob, 3, 1.5);
+      ctx.fillRect(3, -10 + walkBob, 3, 1.5);
+
+      // Messy black anime hair with layered violet-slate sheen
       ctx.fillStyle = '#18151c';
       ctx.fillRect(-9, -24 + walkBob, 18, 7);
-      ctx.fillRect(-8, -20 + walkBob, 4, 5);
+      ctx.fillRect(-9, -20 + walkBob, 4, 5);
       ctx.fillRect(-1, -19 + walkBob, 3, 4);
       ctx.fillRect(5, -20 + walkBob, 4, 5);
-      ctx.fillRect(-7, -27 + walkBob, 5, 4);
-      ctx.fillRect(1, -26 + walkBob, 6, 3);
-      ctx.fillStyle = '#3a3345';
-      ctx.fillRect(-5, -25 + walkBob, 8, 2);
+      ctx.fillRect(-8, -27 + walkBob, 6, 4);
+      ctx.fillRect(1, -26 + walkBob, 7, 3);
+      // Hair rim highlights
+      ctx.fillStyle = '#3730a3';
+      ctx.fillRect(-6, -25 + walkBob, 8, 2);
+      ctx.fillRect(-7, -22 + walkBob, 3, 2);
     }
 
-    // 4. Arms & Held Item / Weapon Swing
+    // 4. Arms & Held Item / Weapon Swing Arc
     let weaponAngle = 0.2;
     if (isAttacking) {
-      weaponAngle = -Math.PI * 0.3 + swingProgress * Math.PI * 0.9;
+      weaponAngle = -Math.PI * 0.35 + swingProgress * Math.PI * 0.95;
+      // Glowing combat motion swoosh arc
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(6, -2 + walkBob, 28, -Math.PI * 0.4, weaponAngle);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(96, 165, 250, 0.35)';
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.arc(6, -2 + walkBob, 26, -Math.PI * 0.35, weaponAngle);
+      ctx.stroke();
+      ctx.restore();
     }
 
     ctx.save();
     ctx.translate(6, -2 + walkBob);
     ctx.rotate(weaponAngle);
 
-    // Arm (red sleeve)
-    ctx.fillStyle = '#c72323';
+    // Arm (red sleeve with shadow)
+    ctx.fillStyle = '#dc2626';
     ctx.fillRect(-2, -3, 6, 9);
-    ctx.fillStyle = '#ffd1a4'; // Hand
+    ctx.fillStyle = '#991b1b';
+    ctx.fillRect(-2, 4, 6, 2);
+    ctx.fillStyle = '#ffd5b0'; // Hand
     ctx.fillRect(0, 5, 4, 4);
 
     // Draw Held Weapon/Tool with Dedicated Sprites
@@ -1100,6 +1220,102 @@ export class SpriteRenderer {
       ctx.ellipse(-2, -2, 7, 5, 0, 0, Math.PI * 2);
       ctx.fill();
 
+    } else if (type === 'acacia_tree') {
+      // African Savanna Umbrella Acacia Tree
+      // Ground shadow
+      ctx.fillStyle = 'rgba(0,0,0,0.32)';
+      ctx.beginPath();
+      ctx.ellipse(0, 16, 26, 9, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Slender reddish-brown bent trunk
+      ctx.fillStyle = '#3d200e';
+      ctx.beginPath();
+      ctx.moveTo(-6, 16);
+      ctx.quadraticCurveTo(-2, 0, -4, -14);
+      ctx.lineTo(4, -14);
+      ctx.quadraticCurveTo(6, 0, 8, 16);
+      ctx.closePath();
+      ctx.fill();
+
+      // Large spreading umbrella branches
+      ctx.strokeStyle = '#4a2813';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(0, -14);
+      ctx.lineTo(-24, -28);
+      ctx.moveTo(0, -14);
+      ctx.lineTo(24, -26);
+      ctx.moveTo(0, -14);
+      ctx.lineTo(0, -32);
+      ctx.stroke();
+
+      // Sprawling flat-topped acacia canopy foliage
+      ctx.fillStyle = '#4d7328';
+      ctx.beginPath();
+      ctx.ellipse(-14, -30, 20, 9, 0, 0, Math.PI * 2);
+      ctx.ellipse(14, -29, 22, 9, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, -35, 26, 10, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Sunlit golden-green foliage highlights
+      ctx.fillStyle = '#729e34';
+      ctx.beginPath();
+      ctx.ellipse(-12, -32, 16, 6, 0, 0, Math.PI * 2);
+      ctx.ellipse(12, -31, 17, 6, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, -37, 20, 6, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+    } else if (type === 'cactus') {
+      // Desert Saguaro Cactus with arms & pink flower
+      // Ground shadow
+      ctx.fillStyle = 'rgba(0,0,0,0.28)';
+      ctx.beginPath();
+      ctx.ellipse(0, 14, 14, 6, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Main trunk
+      ctx.fillStyle = '#216327';
+      ctx.beginPath();
+      ctx.roundRect(-7, -24, 14, 38, [6, 6, 2, 2]);
+      ctx.fill();
+
+      // Left arm
+      ctx.fillStyle = '#216327';
+      ctx.beginPath();
+      ctx.roundRect(-18, -14, 13, 6, [2, 2, 2, 2]);
+      ctx.roundRect(-18, -26, 6, 14, [4, 4, 2, 2]);
+      ctx.fill();
+
+      // Right arm
+      ctx.fillStyle = '#28732f';
+      ctx.beginPath();
+      ctx.roundRect(5, -8, 13, 6, [2, 2, 2, 2]);
+      ctx.roundRect(12, -20, 6, 14, [4, 4, 2, 2]);
+      ctx.fill();
+
+      // Vertical spine ridges
+      ctx.fillStyle = '#164d1c';
+      ctx.fillRect(-3, -22, 1.5, 34);
+      ctx.fillRect(2, -22, 1.5, 34);
+      ctx.fillRect(-16, -24, 1.5, 10);
+      ctx.fillRect(14, -18, 1.5, 10);
+
+      // White prickly spines
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(-8, -18, 1.5, 1.5);
+      ctx.fillRect(-8, -8, 1.5, 1.5);
+      ctx.fillRect(7, -14, 1.5, 1.5);
+      ctx.fillRect(7, -4, 1.5, 1.5);
+
+      // Pink Desert Cactus Blossom on top
+      ctx.fillStyle = '#ec4899';
+      ctx.beginPath();
+      ctx.arc(0, -26, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fde047';
+      ctx.fillRect(-1, -27, 2, 2);
+
     } else if (type === 'cave_crystal') {
       // Glowing amethyst/cyan cave crystal cluster
       ctx.fillStyle = 'rgba(0,0,0,0.3)';
@@ -1221,43 +1437,108 @@ export class SpriteRenderer {
       ctx.fillStyle = '#8c5d31';
       ctx.fillRect(-24, -10, 48, 5);
       ctx.fillRect(-24, 6, 48, 5);
-    } else if (type === 'campfire') {
-      // Stone ring with roaring fire
-      ctx.fillStyle = '#4f4f57';
-      // Stone circle
+    } else if (type === 'campfire' || type === 'campfire_item') {
+      // Warm ambient radial glow under the campfire
+      const pulse = Math.sin(timeMs * 0.012) * 2;
+      const groundGlow = ctx.createRadialGradient(0, 4, 4, 0, 4, 30 + pulse);
+      groundGlow.addColorStop(0, 'rgba(249, 115, 22, 0.45)');
+      groundGlow.addColorStop(0.5, 'rgba(234, 88, 12, 0.2)');
+      groundGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = groundGlow;
+      ctx.beginPath();
+      ctx.arc(0, 4, 30 + pulse, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Stone ring with 8 textured chiseled river stones
       for (let i = 0; i < 8; i++) {
         const ang = (i / 8) * Math.PI * 2;
-        const sx = Math.cos(ang) * 14;
-        const sy = Math.sin(ang) * 14;
+        const sx = Math.cos(ang) * 15;
+        const sy = Math.sin(ang) * 12 + 4;
+        ctx.fillStyle = i % 2 === 0 ? '#3f3f46' : '#52525b';
         ctx.beginPath();
-        ctx.arc(sx, sy, 5, 0, Math.PI * 2);
+        ctx.arc(sx, sy, 5.5, 0, Math.PI * 2);
         ctx.fill();
+        // Stone bevel highlight
+        ctx.fillStyle = '#71717a';
+        ctx.fillRect(sx - 2, sy - 4, 3, 2);
       }
 
-      // Charcoal and logs
-      ctx.fillStyle = '#2e1c0e';
-      ctx.fillRect(-10, -4, 20, 6);
-      ctx.fillRect(-4, -10, 8, 20);
-
-      // Animated Flames
-      const flameFlicker = Math.sin(timeMs * 0.015) * 2;
-      const flameHeight = 12 + Math.cos(timeMs * 0.02) * 3;
-
-      ctx.fillStyle = '#ff3700'; // outer red
+      // Hot embers and glowing coals bed
+      ctx.fillStyle = '#1c1917';
       ctx.beginPath();
-      ctx.arc(0, 0, 9 + flameFlicker, 0, Math.PI * 2);
+      ctx.ellipse(0, 4, 11, 7, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#7f1d1d';
+      ctx.beginPath();
+      ctx.ellipse(0, 4, 9, 5, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      ctx.fillStyle = '#ff9900'; // orange
+      // Charred crossed logs
+      ctx.fillStyle = '#291b12';
+      ctx.save();
+      ctx.rotate(0.35);
+      ctx.fillRect(-12, -3 + 2, 24, 6);
+      ctx.fillStyle = '#452918';
+      ctx.fillRect(-10, -2 + 2, 20, 3);
+      ctx.restore();
+
+      ctx.save();
+      ctx.rotate(-0.4);
+      ctx.fillStyle = '#291b12';
+      ctx.fillRect(-12, -3 + 4, 24, 6);
+      ctx.fillStyle = '#452918';
+      ctx.fillRect(-10, -2 + 4, 20, 3);
+      ctx.restore();
+
+      // Procedural 3-tier leaping animated flames
+      const f1 = Math.sin(timeMs * 0.015) * 2;
+      const f2 = Math.cos(timeMs * 0.022) * 2.5;
+      const f3 = Math.sin(timeMs * 0.03 + 1.2) * 1.5;
+
+      // Outer Crimson Flame
+      ctx.fillStyle = '#dc2626';
       ctx.beginPath();
-      ctx.arc(0, -3, 6 + flameFlicker, 0, Math.PI * 2);
+      ctx.moveTo(-10, 5);
+      ctx.quadraticCurveTo(-12 + f1, -6, f1 * 1.5, -18 + f2);
+      ctx.quadraticCurveTo(12 + f2, -6, 10, 5);
+      ctx.closePath();
       ctx.fill();
 
-      ctx.fillStyle = '#ffea00'; // bright yellow core
+      // Mid Vibrant Orange Flame
+      ctx.fillStyle = '#ea580c';
       ctx.beginPath();
-      ctx.arc(0, -5, 3 + flameFlicker * 0.5, 0, Math.PI * 2);
+      ctx.moveTo(-7, 4);
+      ctx.quadraticCurveTo(-8 + f2, -4, f2, -14 + f1);
+      ctx.quadraticCurveTo(8 + f1, -4, 7, 4);
+      ctx.closePath();
       ctx.fill();
-    } else if (type === 'chest') {
+
+      // Inner Blazing Yellow Flame
+      ctx.fillStyle = '#fde047';
+      ctx.beginPath();
+      ctx.moveTo(-4, 3);
+      ctx.quadraticCurveTo(-4 + f3, -2, f3, -9 + f2 * 0.5);
+      ctx.quadraticCurveTo(4 + f3, -2, 4, 3);
+      ctx.closePath();
+      ctx.fill();
+
+      // White-hot core
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.ellipse(f3 * 0.5, 0, 2.5, 4, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Rising spark particles drifting upward
+      const spark1Y = ((timeMs * 0.04) % 24);
+      const spark1X = Math.sin(timeMs * 0.008) * 6;
+      ctx.fillStyle = '#facc15';
+      ctx.fillRect(spark1X - 1, -12 - spark1Y, 2, 2);
+
+      const spark2Y = ((timeMs * 0.035 + 12) % 24);
+      const spark2X = Math.cos(timeMs * 0.009) * 8;
+      ctx.fillStyle = '#fb923c';
+      ctx.fillRect(spark2X - 1, -10 - spark2Y, 1.5, 1.5);
+    } else if (type === 'chest' || type === 'chest_item') {
       // Storage Chest
       ctx.fillStyle = 'rgba(0,0,0,0.3)';
       ctx.beginPath();
@@ -1279,7 +1560,7 @@ export class SpriteRenderer {
       // Gold latch
       ctx.fillStyle = '#ffcc00';
       ctx.fillRect(-3, -4, 6, 7);
-    } else if (type === 'bed') {
+    } else if (type === 'bed' || type === 'bed_item') {
       // Bed with red blanket and white pillow
       ctx.fillStyle = '#59381c'; // frame
       ctx.fillRect(-16, -24, 32, 48);
@@ -1292,7 +1573,7 @@ export class SpriteRenderer {
       // Pillow
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(-12, -22, 24, 9);
-    } else if (type === 'furnace') {
+    } else if (type === 'furnace' || type === 'furnace_item') {
       // Stone Furnace
       ctx.fillStyle = '#4f4f57';
       ctx.fillRect(-18, -22, 36, 42);
@@ -1393,52 +1674,150 @@ export class SpriteRenderer {
       ctx.arc(0, -11 + f * 0.5, 3, 0, Math.PI * 2);
     } else if (type === 'workbench' || type === 'workbench_item') {
       // Drop shadow on ground
-      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      ctx.fillStyle = 'rgba(0,0,0,0.36)';
       ctx.beginPath();
-      ctx.ellipse(0, 14, 22, 6, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, 16, 24, 7, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // Crafting Workbench: 4 solid wooden legs with crossbraces
-      ctx.fillStyle = '#3a210f';
-      ctx.fillRect(-20, 2, 7, 18);
-      ctx.fillRect(13, 2, 7, 18);
-      ctx.fillRect(-20, -4, 7, 14);
-      ctx.fillRect(13, -4, 7, 14);
-      // Cross support beam
-      ctx.fillStyle = '#4f2e16';
-      ctx.fillRect(-16, 8, 32, 4);
+      // Wood shavings / sawdust scattered on grass
+      ctx.fillStyle = '#fef08a';
+      ctx.fillRect(-18, 14, 3, 2);
+      ctx.fillRect(14, 15, 3, 2);
+      ctx.fillRect(-6, 17, 2, 2);
+      ctx.fillRect(8, 16, 2, 2);
 
-      // Thick heavy wooden tabletop with bevel
-      ctx.fillStyle = '#5c3517';
-      ctx.fillRect(-24, -16, 48, 20);
-      ctx.fillStyle = '#7a4822';
-      ctx.fillRect(-22, -14, 44, 16);
-      // Wood plank groove lines
-      ctx.fillStyle = '#4f2c12';
-      ctx.fillRect(-22, -8, 44, 1.5);
-      ctx.fillRect(-22, -2, 44, 1.5);
+      // Sturdy 4 timber legs with dark joinery
+      ctx.fillStyle = '#2e1809'; // Shadow wood
+      ctx.fillRect(-21, 0, 7, 20);
+      ctx.fillRect(14, 0, 7, 20);
+      ctx.fillRect(-17, -4, 5, 12);
+      ctx.fillRect(12, -4, 5, 12);
 
-      // Heavy Iron Vice Clamp on left side
-      ctx.fillStyle = '#1e293b';
-      ctx.fillRect(-22, -20, 9, 10);
-      ctx.fillStyle = '#475569';
-      ctx.fillRect(-20, -22, 5, 4);
-      ctx.fillStyle = '#94a3b8';
-      ctx.fillRect(-24, -18, 4, 6);
-
-      // Steel Hammer resting on bench
+      // Lower storage shelf with stored wood blocks & rope
+      ctx.fillStyle = '#45250f';
+      ctx.fillRect(-18, 10, 36, 4);
       ctx.fillStyle = '#78350f';
-      ctx.fillRect(2, -9, 12, 2.5);
-      ctx.fillStyle = '#94a3b8';
-      ctx.fillRect(12, -12, 5, 8);
-      ctx.fillStyle = '#cbd5e1';
-      ctx.fillRect(14, -11, 2, 6);
+      ctx.fillRect(-14, 7, 12, 3);
+      ctx.fillStyle = '#d97706'; // Coiled rope
+      ctx.fillRect(4, 7, 8, 3);
 
-      // Small blueprint scroll on table
-      ctx.fillStyle = '#e2e8f0';
-      ctx.fillRect(-10, -12, 8, 4);
-      ctx.fillStyle = '#38bdf8';
-      ctx.fillRect(-9, -11, 6, 2);
+      // Heavy wooden tabletop with bevel and planks
+      ctx.fillStyle = '#45250f'; // Table edge shadow
+      ctx.fillRect(-25, -18, 50, 22);
+      ctx.fillStyle = '#78350f'; // Table base
+      ctx.fillRect(-23, -16, 46, 18);
+      ctx.fillStyle = '#92400e'; // Tabletop surface
+      ctx.fillRect(-23, -16, 46, 14);
+
+      // Plank separator grooves
+      ctx.fillStyle = '#45250f';
+      ctx.fillRect(-23, -11, 46, 1.5);
+      ctx.fillRect(-23, -6, 46, 1.5);
+
+      // Heavy Iron Bench Vise on left corner
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(-24, -22, 10, 12);
+      ctx.fillStyle = '#334155';
+      ctx.fillRect(-22, -24, 6, 5);
+      ctx.fillStyle = '#64748b';
+      ctx.fillRect(-26, -20, 4, 7);
+      ctx.fillStyle = '#94a3b8'; // Metal screw spindle
+      ctx.fillRect(-20, -18, 2, 4);
+
+      // Steel Claw Hammer lying on table
+      ctx.fillStyle = '#78350f'; // Handle
+      ctx.fillRect(2, -10, 13, 2.5);
+      ctx.fillStyle = '#475569'; // Head
+      ctx.fillRect(13, -13, 6, 8);
+      ctx.fillStyle = '#cbd5e1'; // Metal sheen
+      ctx.fillRect(15, -12, 2, 6);
+
+      // Hand Saw on table
+      ctx.fillStyle = '#94a3b8'; // Saw blade
+      ctx.fillRect(-6, -14, 7, 10);
+      ctx.fillStyle = '#45250f'; // Handle
+      ctx.fillRect(-8, -13, 3, 5);
+
+      // Rolled Blueprint scroll with blue markings
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillRect(-12, -14, 9, 5);
+      ctx.fillStyle = '#0284c7';
+      ctx.fillRect(-10, -13, 6, 2);
+    } else if (type === 'weapon_workbench' || type === 'weapon_workbench_item') {
+      // Gunsmith Workbench with gunmetal frame, rifle rack, ammo boxes & vise
+      // Drop shadow
+      ctx.fillStyle = 'rgba(0,0,0,0.38)';
+      ctx.beginPath();
+      ctx.ellipse(0, 16, 26, 8, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Spent brass casings on floor
+      ctx.fillStyle = '#facc15';
+      ctx.fillRect(-16, 15, 3, 1.5);
+      ctx.fillRect(15, 14, 2, 1.5);
+      ctx.fillRect(8, 17, 3, 1.5);
+
+      // Heavy industrial steel legs
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(-22, 0, 8, 20);
+      ctx.fillRect(14, 0, 8, 20);
+      ctx.fillStyle = '#334155';
+      ctx.fillRect(-20, 2, 4, 18);
+      ctx.fillRect(16, 2, 4, 18);
+
+      // Steel lower tier shelf with ammo crates
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(-19, 10, 38, 4);
+      // Ammo box on lower shelf
+      ctx.fillStyle = '#15803d'; // Military olive drab ammo can
+      ctx.fillRect(-14, 4, 12, 8);
+      ctx.fillStyle = '#facc15';
+      ctx.fillRect(-12, 6, 8, 2); // Yellow stencil
+
+      // Solid walnut bench top
+      ctx.fillStyle = '#311b0b';
+      ctx.fillRect(-26, -18, 52, 22);
+      ctx.fillStyle = '#45220c';
+      ctx.fillRect(-24, -16, 48, 18);
+      ctx.fillStyle = '#5c2e10';
+      ctx.fillRect(-24, -16, 48, 14);
+
+      // Rear wooden gun rack
+      ctx.fillStyle = '#1c1917';
+      ctx.fillRect(-20, -32, 40, 15);
+      ctx.fillStyle = '#292524';
+      ctx.fillRect(-18, -30, 36, 12);
+
+      // Mounted hunting rifle on rack
+      ctx.fillStyle = '#44403c'; // Dark barrel
+      ctx.fillRect(-16, -26, 32, 3);
+      ctx.fillStyle = '#78350f'; // Walnut rifle stock
+      ctx.fillRect(-16, -25, 9, 5);
+      ctx.fillStyle = '#ca8a04'; // Brass trigger guard
+      ctx.fillRect(-6, -23, 3, 2);
+      ctx.fillStyle = '#0f172a'; // Telescopic scope
+      ctx.fillRect(-2, -29, 12, 3);
+
+      // Heavy rotary gunsmith vise on left
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(-25, -22, 11, 12);
+      ctx.fillStyle = '#475569';
+      ctx.fillRect(-24, -25, 8, 5);
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillRect(-22, -20, 3, 4);
+
+      // Gun schematic blueprint on bench
+      ctx.fillStyle = '#1e3a8a';
+      ctx.fillRect(-4, -14, 14, 10);
+      ctx.fillStyle = '#60a5fa';
+      ctx.fillRect(-2, -12, 10, 1.5);
+      ctx.fillRect(-2, -9, 8, 1.5);
+
+      // Pistol slide & parts being assembled
+      ctx.fillStyle = '#18181b';
+      ctx.fillRect(12, -13, 8, 4);
+      ctx.fillStyle = '#facc15';
+      ctx.fillRect(13, -8, 2, 3); // 9mm brass cartridge
     } else if (type === 'sawmill') {
       // Sawmill / Carpentry bench
       ctx.fillStyle = '#452a15';
@@ -1765,6 +2144,175 @@ export class SpriteRenderer {
       ctx.beginPath();
       ctx.arc(12, -26 + floatBob, 16, Math.PI * 0.8, Math.PI * 1.5);
       ctx.fill();
+    } else if (type === 'scorpion') {
+      // Deadly Desert Scorpion with venomous tail and snapping pincers
+      // Chitin abdomen & thorax
+      ctx.fillStyle = '#5c2b09';
+      ctx.beginPath();
+      ctx.ellipse(-2, 0 + bob, 12, 7, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#85420d';
+      ctx.beginPath();
+      ctx.ellipse(-2, -1 + bob, 10, 5, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Multi-jointed crawling legs (4 on each side)
+      ctx.strokeStyle = '#5c2b09';
+      ctx.lineWidth = 1.8;
+      for (let i = -3; i <= 3; i += 2) {
+        const legSway = Math.sin(animFrame * 12 + i) * 3;
+        // Top legs
+        ctx.beginPath();
+        ctx.moveTo(i * 3, -4 + bob);
+        ctx.lineTo(i * 4, -12 + bob + legSway);
+        ctx.stroke();
+        // Bottom legs
+        ctx.beginPath();
+        ctx.moveTo(i * 3, 4 + bob);
+        ctx.lineTo(i * 4, 12 + bob - legSway);
+        ctx.stroke();
+      }
+
+      // Large forward snapping claws / pincers
+      ctx.fillStyle = '#9a3412';
+      ctx.beginPath();
+      ctx.moveTo(8, -4 + bob);
+      ctx.lineTo(16, -10 + bob);
+      ctx.lineTo(20, -7 + bob);
+      ctx.lineTo(14, -2 + bob);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.moveTo(8, 4 + bob);
+      ctx.lineTo(16, 10 + bob);
+      ctx.lineTo(20, 7 + bob);
+      ctx.lineTo(14, 2 + bob);
+      ctx.closePath();
+      ctx.fill();
+
+      // Sharp pincer tips
+      ctx.fillStyle = '#ea580c';
+      ctx.fillRect(19, -8 + bob, 3, 2);
+      ctx.fillRect(19, 6 + bob, 3, 2);
+
+      // Curved arched stinger tail over body
+      const tailCurl = Math.sin(animFrame * 6) * 2;
+      ctx.strokeStyle = '#78350f';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(-12, 0 + bob);
+      ctx.quadraticCurveTo(-18, -14 + bob, -8, -20 + bob + tailCurl);
+      ctx.lineTo(2, -18 + bob + tailCurl);
+      ctx.stroke();
+
+      // Bulbous venom gland & razor stinger
+      ctx.fillStyle = '#b45309';
+      ctx.beginPath();
+      ctx.arc(3, -18 + bob + tailCurl, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ef4444'; // Glowing poison barb
+      ctx.fillRect(6, -20 + bob + tailCurl, 4, 2);
+
+      // Eyes
+      ctx.fillStyle = '#dc2626';
+      ctx.fillRect(6, -2 + bob, 2, 2);
+      ctx.fillRect(6, 1 + bob, 2, 2);
+
+    } else if (type === 'mummy') {
+      // Ancient Desert Undead Mummy with gold pharaoh relic & wrapped bandages
+      // Legs
+      ctx.fillStyle = '#d4c79f';
+      ctx.fillRect(-6, 4 + bob, 4, 10);
+      ctx.fillRect(2, 4 + bob, 4, 10);
+      ctx.fillStyle = '#a69871';
+      ctx.fillRect(-6, 7 + bob, 4, 1.5);
+      ctx.fillRect(2, 10 + bob, 4, 1.5);
+
+      // Torso wrapped in weathered linen
+      ctx.fillStyle = '#dfd3ab';
+      ctx.fillRect(-8, -8 + bob, 16, 14);
+      ctx.fillStyle = '#b3a379';
+      ctx.fillRect(-8, -5 + bob, 16, 1.5);
+      ctx.fillRect(-8, -1 + bob, 16, 1.5);
+
+      // Golden Pharaoh Pectoral Amulet
+      ctx.fillStyle = '#facc15';
+      ctx.fillRect(-5, -7 + bob, 10, 4);
+      ctx.fillStyle = '#2563eb'; // Lapis lazuli jewel
+      ctx.fillRect(-1, -6 + bob, 2, 2);
+
+      // Reaching mummy arms
+      ctx.fillStyle = '#d4c79f';
+      ctx.fillRect(4, -6 + bob, 13, 4);
+      ctx.fillStyle = '#9e8f66';
+      ctx.fillRect(8, -6 + bob, 2, 4);
+
+      // Mummy head wrapped with linen hood
+      ctx.fillStyle = '#d4c79f';
+      ctx.fillRect(-7, -20 + bob, 14, 12);
+      ctx.fillStyle = '#a69871';
+      ctx.fillRect(-7, -18 + bob, 14, 1.5);
+      ctx.fillRect(-7, -13 + bob, 14, 1.5);
+
+      // Menacing amber glowing eyes from the dark depths
+      ctx.fillStyle = '#1c1917';
+      ctx.fillRect(0, -17 + bob, 5, 4);
+      ctx.fillStyle = '#f59e0b'; // Amber eye
+      ctx.fillRect(2, -16 + bob, 2, 2);
+
+      // Unraveling linen ribbon fluttering behind
+      const ribbon = Math.sin(animFrame * 8) * 3;
+      ctx.fillStyle = '#f5eedb';
+      ctx.fillRect(-12, -4 + bob + ribbon, 5, 1.5);
+      ctx.fillRect(-15, -2 + bob - ribbon, 4, 1.5);
+
+    } else if (type === 'desert_snake') {
+      // Coiled Desert Rattlesnake with diamondback pattern & flickering tongue
+      const slither = Math.sin(animFrame * 14) * 4;
+
+      // S-curve sinuous body
+      ctx.fillStyle = '#b45309';
+      ctx.beginPath();
+      ctx.ellipse(-10, 4 + bob, 6, 4, 0, 0, Math.PI * 2);
+      ctx.ellipse(-4, -2 + bob + slither * 0.5, 7, 5, 0, 0, Math.PI * 2);
+      ctx.ellipse(4, 2 + bob - slither * 0.5, 8, 5, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Diamondback yellow scales
+      ctx.fillStyle = '#fde047';
+      ctx.fillRect(-8, 3 + bob, 2, 2);
+      ctx.fillRect(-4, -3 + bob + slither * 0.5, 3, 3);
+      ctx.fillRect(3, 1 + bob - slither * 0.5, 3, 3);
+
+      // Flattened viper head
+      ctx.fillStyle = '#92400e';
+      ctx.beginPath();
+      ctx.moveTo(8, -4 + bob);
+      ctx.lineTo(18, 0 + bob);
+      ctx.lineTo(8, 4 + bob);
+      ctx.closePath();
+      ctx.fill();
+
+      // Slit reptilian eye
+      ctx.fillStyle = '#facc15';
+      ctx.fillRect(11, -2 + bob, 2, 2);
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(12, -2 + bob, 1, 2);
+
+      // Flickering red forked tongue
+      if (Math.sin(animFrame * 18) > 0.2) {
+        ctx.fillStyle = '#ef4444';
+        ctx.fillRect(18, -0.5 + bob, 5, 1);
+        ctx.fillRect(22, -1.5 + bob, 2, 1);
+        ctx.fillRect(22, 0.5 + bob, 2, 1);
+      }
+
+      // Rattle tail vibrating with blur
+      const rattleVibe = (Math.random() - 0.5) * 3;
+      ctx.fillStyle = '#ca8a04';
+      ctx.fillRect(-15, 3 + bob + rattleVibe, 3, 2);
+      ctx.fillRect(-17, 3 + bob + rattleVibe, 2, 2);
     }
 
     // Daytime Sunlight Fire & Smoke Burning Effect

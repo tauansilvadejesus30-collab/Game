@@ -98,6 +98,11 @@ export class GameEngine {
   // Auto-save timer
   private autoSaveTimer: number = 0;
 
+  // Invulnerability & Survival warnings
+  public invulnerabilityTimer: number = 0;
+  private survivalWarningTimer: number = 0;
+  private oceanAudioTimer: number = 0;
+
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d', { alpha: false })!;
@@ -243,14 +248,26 @@ export class GameEngine {
       }
 
       // Action hotkeys
-      if (e.code === 'KeyE') this.onOpenInventory?.();
+      if (e.code === 'KeyE') {
+        const nearbyStruct = this.getNearbyInteractiveStructure();
+        if (nearbyStruct) {
+          this.interactWithStructure(nearbyStruct);
+        } else {
+          this.onOpenInventory?.();
+        }
+      }
       if (e.code === 'KeyC') this.onOpenCrafting?.();
       if (e.code === 'KeyB') this.onOpenBuilding?.();
       if (e.code === 'KeyM') this.onOpenMap?.();
       if (e.code === 'KeyK') this.onOpenSkills?.();
       if (e.code === 'Space') {
         e.preventDefault();
-        this.triggerAttackOrInteract();
+        const nearbyStruct = this.getNearbyInteractiveStructure();
+        if (nearbyStruct && !this.isBuildingMode) {
+          this.interactWithStructure(nearbyStruct);
+        } else {
+          this.triggerAttackOrInteract();
+        }
       }
     });
 
@@ -274,7 +291,7 @@ export class GameEngine {
     this.canvas.addEventListener('mousedown', (e) => {
       if (e.button === 0) {
         this.isMouseDown = true;
-        this.triggerAttackOrInteract();
+        this.handleClickOrInteract(false);
       }
     });
 
@@ -293,9 +310,8 @@ export class GameEngine {
       const touch = e.changedTouches[0];
       if (touch) {
         handleTouchUpdate(touch);
-        if (this.isBuildingMode) {
+        if (this.handleClickOrInteract(true)) {
           e.preventDefault();
-          this.tryPlaceStructure();
         }
       }
     }, { passive: false });
@@ -332,6 +348,130 @@ export class GameEngine {
       soundEngine.playUiClick();
       this.onStateChange?.();
     }
+  }
+
+  public handleClickOrInteract(isTouch = false): boolean {
+    // 1. If in Building Mode: try to place structure
+    if (this.isBuildingMode && this.selectedBuildingStructureId) {
+      this.tryPlaceStructure();
+      return true;
+    }
+
+    // 2. Direct click / tap on interactive structures in the world (Workbench, Campfire, Chest, Bed, Door, Furnace, Well)
+    const clickTolerance = TILE_SIZE * 0.85;
+    const clickedStruct = this.world.structures.find(s => {
+      return Math.hypot(s.x - this.mouseWorldX, s.y - this.mouseWorldY) <= clickTolerance;
+    });
+
+    if (clickedStruct) {
+      const dist = Math.hypot(clickedStruct.x - this.player.x, clickedStruct.y - this.player.y);
+      const MAX_CLICK_REACH = 150;
+      if (dist <= MAX_CLICK_REACH) {
+        return this.interactWithStructure(clickedStruct);
+      } else {
+        const sType = clickedStruct.type as string;
+        const name = (sType === 'workbench' || sType === 'workbench_item') 
+          ? 'Bancada' 
+          : (sType === 'campfire' || sType === 'campfire_item') 
+            ? 'Fogueira' 
+            : 'Estrutura';
+        this.addFloatingText(clickedStruct.x, clickedStruct.y - 20, `Aproxime-se da ${name}!`, '#f59e0b');
+        return true;
+      }
+    }
+
+    // 3. Normal attack or hotbar item interact
+    this.triggerAttackOrInteract();
+    return false;
+  }
+
+  public getNearbyInteractiveStructure(maxDist = 80): StructureEntity | null {
+    let closest: StructureEntity | null = null;
+    let closestDist = maxDist;
+    for (const struct of this.world.structures) {
+      const dist = Math.hypot(struct.x - this.player.x, struct.y - this.player.y);
+      if (dist < closestDist) {
+        closest = struct;
+        closestDist = dist;
+      }
+    }
+    return closest;
+  }
+
+  public interactWithStructure(struct: StructureEntity): boolean {
+    const equipped = this.player.inventory[this.player.selectedHotbarIndex];
+    const isHammer = canDismantleWithTool(equipped?.item);
+
+    // If holding a hammer, dismantle and return item to player!
+    if (isHammer && struct.type !== 'cave_entrance' && struct.type !== 'cave_exit' && struct.type !== 'farmland') {
+      this.dismantleStructure(struct);
+      return true;
+    }
+
+    const sType = struct.type as string;
+    if (sType === 'cave_entrance') {
+      this.enterCave();
+      return true;
+    } else if (sType === 'cave_exit') {
+      this.exitCave();
+      return true;
+    } else if (sType === 'chest') {
+      soundEngine.playUiClick();
+      this.onOpenChest?.(struct);
+      return true;
+    } else if (sType === 'campfire' || sType === 'campfire_item' || sType === 'furnace' || sType === 'furnace_item') {
+      soundEngine.playUiClick();
+      this.addFloatingText(struct.x, struct.y - 20, '🔥 Culinária / Forja', '#fb923c');
+      this.onOpenCooking?.(struct);
+      return true;
+    } else if (sType === 'weapon_workbench' || sType === 'weapon_workbench_item') {
+      soundEngine.playUiClick();
+      this.addFloatingText(struct.x, struct.y - 20, '🔫 Bancada de Armas Aberta!', '#38bdf8');
+      this.onOpenCrafting?.();
+      return true;
+    } else if (sType === 'workbench' || sType === 'workbench_item' || sType === 'sawmill' || sType === 'sawmill_item' || sType === 'anvil' || sType === 'anvil_item') {
+      soundEngine.playUiClick();
+      this.addFloatingText(struct.x, struct.y - 20, '🛠️ Bancada Aberta!', '#facc15');
+      this.onOpenCrafting?.();
+      return true;
+    } else if (sType === 'raft' || sType === 'canoe' || sType === 'wood_boat') {
+      if (this.player.isBoating) {
+        this.player.isBoating = false;
+        this.player.boatType = null;
+        this.addFloatingText(this.player.x, this.player.y - 15, 'Desembarcou do Barco', '#ffffff');
+      } else {
+        this.player.isBoating = true;
+        this.player.boatType = sType as 'raft' | 'canoe' | 'wood_boat';
+        this.player.isSwimming = false;
+        soundEngine.playCollect();
+        this.addFloatingText(this.player.x, this.player.y - 15, 'Embarcou no Barco!', '#38bdf8');
+      }
+      this.onStateChange?.();
+      return true;
+    } else if (sType === 'bed') {
+      this.player.spawnPoint = { x: struct.x, y: struct.y };
+      this.addFloatingText(this.player.x, this.player.y - 25, 'Cama vinculada! Ponto de renascimento salvo.', '#38bdf8');
+      this.sleepInBed();
+      return true;
+    } else if (sType === 'well') {
+      this.drinkFromWell();
+      return true;
+    } else if (sType === 'wood_door') {
+      struct.isOpen = !struct.isOpen;
+      soundEngine.playBuild();
+      this.addFloatingText(struct.x, struct.y - 10, struct.isOpen ? 'Porta Aberta' : 'Porta Fechada', '#ffcc00');
+      this.onStateChange?.();
+      return true;
+    } else if (sType === 'farmland' && struct.cropStage && struct.cropStage >= 3) {
+      struct.cropStage = 1;
+      const yieldItem = struct.cropYieldItemId ? ITEMS[struct.cropYieldItemId] : ITEMS.tomato;
+      this.addItemToInventory(yieldItem, 2);
+      soundEngine.playPickup();
+      this.addFloatingText(struct.x, struct.y - 10, `+2 ${yieldItem.name}`, '#44ff44');
+      this.checkQuestProgress('gather', 'crop', 1);
+      return true;
+    }
+    return false;
   }
 
   public triggerAttackOrInteract() {
@@ -373,8 +513,11 @@ export class GameEngine {
       this.player.facing = dy > 0 ? 'down' : 'up';
     }
 
-    // Sound
-    if (equipped && equipped.item.id === 'bow') {
+    // Sound & Ranged Weapons
+    if (equipped && (equipped.item.id === 'pistol' || equipped.item.id === 'rifle')) {
+      this.shootFirearm(equipped.item.id as 'pistol' | 'rifle');
+      return;
+    } else if (equipped && equipped.item.id === 'bow') {
       this.shootBowArrow();
     } else {
       soundEngine.playSwing();
@@ -385,6 +528,85 @@ export class GameEngine {
 
     // Check hits against resources or enemies
     this.checkHitBox();
+  }
+
+  private shootFirearm(gunId: 'pistol' | 'rifle') {
+    const requiredAmmoId = gunId === 'pistol' ? 'pistol_ammo' : 'rifle_ammo';
+    const ammoSlot = this.player.inventory.find(s => s && s.item.id === requiredAmmoId);
+
+    if (!ammoSlot || ammoSlot.quantity <= 0) {
+      soundEngine.playEmptyGun();
+      const ammoName = gunId === 'pistol' ? 'Munição 9mm' : 'Cartucho .308';
+      this.addFloatingText(this.player.x, this.player.y - 25, `Sem ${ammoName}!`, '#ef4444');
+      return;
+    }
+
+    // Deduct 1 ammo
+    ammoSlot.quantity--;
+    if (ammoSlot.quantity <= 0) {
+      const idx = this.player.inventory.indexOf(ammoSlot);
+      this.player.inventory[idx] = null;
+    }
+
+    // Gunshot audio & recoil screenshake
+    if (gunId === 'pistol') {
+      soundEngine.playPistolShot();
+      this.triggerShake(5, 0.18);
+    } else {
+      soundEngine.playRifleShot();
+      this.triggerShake(9, 0.26);
+    }
+
+    const angle = Math.atan2(this.mouseWorldY - this.player.y, this.mouseWorldX - this.player.x);
+    const speed = gunId === 'pistol' ? 820 : 1150;
+    const damage = gunId === 'pistol' ? 48 : 95;
+
+    // Spawn Muzzle Flash Spark Particles
+    for (let k = 0; k < 6; k++) {
+      const pAngle = angle + (Math.random() - 0.5) * 0.45;
+      const pSpeed = 80 + Math.random() * 120;
+      this.particles.push({
+        x: this.player.x + Math.cos(angle) * 16,
+        y: this.player.y + Math.sin(angle) * 16,
+        vx: Math.cos(pAngle) * pSpeed,
+        vy: Math.sin(pAngle) * pSpeed,
+        life: 0.12,
+        maxLife: 0.12,
+        color: k % 2 === 0 ? '#fef08a' : '#f97316',
+        size: 2.5,
+        alpha: 1,
+        type: 'spark',
+      });
+    }
+
+    // Muzzle smoke puff
+    this.particles.push({
+      x: this.player.x + Math.cos(angle) * 18,
+      y: this.player.y + Math.sin(angle) * 18,
+      vx: Math.cos(angle) * 20,
+      vy: Math.sin(angle) * 20,
+      life: 0.35,
+      maxLife: 0.35,
+      color: '#94a3b8',
+      size: 4.5,
+      alpha: 0.6,
+      type: 'smoke',
+    });
+
+    // Spawn ballistic projectile
+    this.world.projectiles.push({
+      id: `proj_bullet_${Date.now()}_${Math.random()}`,
+      x: this.player.x + Math.cos(angle) * 14,
+      y: this.player.y + Math.sin(angle) * 14,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      damage,
+      isEnemy: false,
+      lifespan: gunId === 'pistol' ? 1.0 : 1.4,
+      projectileType: gunId === 'pistol' ? 'bullet_pistol' : 'bullet_rifle',
+    });
+
+    this.onStateChange?.();
   }
 
   private consumeItem(slotIndex: number) {
@@ -439,69 +661,11 @@ export class GameEngine {
   }
 
   private checkStructureInteraction() {
-    const interactRange = 60;
-    const equipped = this.player.inventory[this.player.selectedHotbarIndex];
-    const isHammer = canDismantleWithTool(equipped?.item);
-
+    const interactRange = 75;
     for (const struct of this.world.structures) {
       const dist = Math.hypot(struct.x - this.player.x, struct.y - this.player.y);
       if (dist <= interactRange) {
-        // If holding a hammer, dismantle and return item to player!
-        if (isHammer && struct.type !== 'cave_entrance' && struct.type !== 'cave_exit' && struct.type !== 'farmland') {
-          this.dismantleStructure(struct);
-          return;
-        }
-
-        if (struct.type === 'cave_entrance') {
-          this.enterCave();
-          return;
-        } else if (struct.type === 'cave_exit') {
-          this.exitCave();
-          return;
-        } else if (struct.type === 'chest') {
-          this.onOpenChest?.(struct);
-          return;
-        } else if (struct.type === 'campfire' || struct.type === 'furnace') {
-          this.onOpenCooking?.(struct);
-          return;
-        } else if (struct.type === 'workbench' || struct.type === 'sawmill' || struct.type === 'anvil') {
-          this.onOpenCrafting?.();
-          return;
-        } else if (struct.type === 'raft' || struct.type === 'canoe' || struct.type === 'wood_boat') {
-          if (this.player.isBoating) {
-            this.player.isBoating = false;
-            this.player.boatType = null;
-            this.addFloatingText(this.player.x, this.player.y - 15, 'Desembarcou do Barco', '#ffffff');
-          } else {
-            this.player.isBoating = true;
-            this.player.boatType = struct.type as 'raft' | 'canoe' | 'wood_boat';
-            this.player.isSwimming = false;
-            soundEngine.playCollect();
-            this.addFloatingText(this.player.x, this.player.y - 15, 'Embarcou no Barco!', '#38bdf8');
-          }
-          this.onStateChange?.();
-          return;
-        } else if (struct.type === 'bed') {
-          this.player.spawnPoint = { x: struct.x, y: struct.y };
-          this.addFloatingText(this.player.x, this.player.y - 25, 'Cama vinculada! Ponto de renascimento salvo.', '#38bdf8');
-          this.sleepInBed();
-          return;
-        } else if (struct.type === 'well') {
-          this.drinkFromWell();
-          return;
-        } else if (struct.type === 'wood_door') {
-          struct.isOpen = !struct.isOpen;
-          soundEngine.playBuild();
-          this.addFloatingText(struct.x, struct.y - 10, struct.isOpen ? 'Porta Aberta' : 'Porta Fechada', '#ffcc00');
-          return;
-        } else if (struct.type === 'farmland' && struct.cropStage && struct.cropStage >= 3) {
-          // Harvest ripe crop!
-          struct.cropStage = 1;
-          const yieldItem = struct.cropYieldItemId ? ITEMS[struct.cropYieldItemId] : ITEMS.tomato;
-          this.addItemToInventory(yieldItem, 2);
-          soundEngine.playPickup();
-          this.addFloatingText(struct.x, struct.y - 10, `+2 ${yieldItem.name}`, '#44ff44');
-          this.checkQuestProgress('gather', 'crop', 1);
+        if (this.interactWithStructure(struct)) {
           return;
         }
       }
@@ -735,6 +899,9 @@ export class GameEngine {
     // 3. Check Resources (Trees, Rocks, Ores, Loose items, Bushes)
     for (const res of this.world.resources) {
       if (res.hp <= 0) continue;
+      // Fast AABB bounding box check to eliminate distance math for off-target resources
+      if (Math.abs(res.x - attackX) > attackReach || Math.abs(res.y - attackY) > attackReach) continue;
+
       const dist = Math.hypot(res.x - attackX, res.y - attackY);
       if (dist <= attackReach) {
         // Instant manual pickup for loose branches, stones, clay, and sand
@@ -752,7 +919,9 @@ export class GameEngine {
           this.checkQuestProgress('gather', res.resourceId, yieldCount);
 
           const idx = this.world.resources.indexOf(res);
-          this.world.resources.splice(idx, 1);
+          if (idx !== -1) {
+            this.world.resources.splice(idx, 1);
+          }
           return;
         }
 
@@ -785,13 +954,13 @@ export class GameEngine {
 
         if (res.type.includes('tree')) {
           soundEngine.playChop();
-          this.spawnBurst(res.x, res.y, '#8f5d34', 6);
+          this.spawnBurst(res.x, res.y, '#8f5d34', 5);
         } else if (res.type.includes('bush') || res.type.includes('plant')) {
           soundEngine.playPickup();
-          this.spawnBurst(res.x, res.y, '#22c55e', 5);
+          this.spawnBurst(res.x, res.y, '#22c55e', 4);
         } else {
           soundEngine.playMine();
-          this.spawnBurst(res.x, res.y, '#7a7a85', 6);
+          this.spawnBurst(res.x, res.y, '#7a7a85', 5);
         }
 
         if (res.hp <= 0) {
@@ -805,9 +974,13 @@ export class GameEngine {
           }
           this.gainPlayerXp(15);
           this.checkQuestProgress('gather', res.resourceId, yieldCount);
+          const targetItem = ITEMS[res.resourceId];
+          this.addFloatingText(res.x, res.y - 20, `+${yieldCount} ${targetItem?.name || 'Madeira'}`, '#4ade80');
 
           const idx = this.world.resources.indexOf(res);
-          this.world.resources.splice(idx, 1);
+          if (idx !== -1) {
+            this.world.resources.splice(idx, 1);
+          }
         }
         return;
       }
@@ -831,6 +1004,17 @@ export class GameEngine {
     } else if (enemy.type === 'boss_spectre') {
       this.spawnLoot(enemy.x, enemy.y, 'gold_ore', 5);
       this.spawnLoot(enemy.x, enemy.y, 'iron_sword', 1);
+    } else if (enemy.type === 'scorpion') {
+      this.spawnLoot(enemy.x, enemy.y, 'scorpion_stinger', Math.random() < 0.6 ? 2 : 1);
+      this.spawnLoot(enemy.x, enemy.y, 'stone', 2);
+    } else if (enemy.type === 'mummy') {
+      this.spawnLoot(enemy.x, enemy.y, 'ancient_cloth', 3);
+      this.spawnLoot(enemy.x, enemy.y, 'bandage', 2);
+      if (Math.random() < 0.45) this.spawnLoot(enemy.x, enemy.y, 'pistol_ammo', 6);
+      if (Math.random() < 0.35) this.spawnLoot(enemy.x, enemy.y, 'gold_ore', 2);
+    } else if (enemy.type === 'desert_snake') {
+      this.spawnLoot(enemy.x, enemy.y, 'snake_venom', 2);
+      this.spawnLoot(enemy.x, enemy.y, 'raw_meat', 1);
     }
 
     const idx = this.world.enemies.indexOf(enemy);
@@ -918,15 +1102,17 @@ export class GameEngine {
 
   public getNearbyStations(): string[] {
     const stations: Set<string> = new Set(['none']);
-    const range = 140;
+    const range = 150;
     for (const s of this.world.structures) {
       const dist = Math.hypot(s.x - this.player.x, s.y - this.player.y);
       if (dist <= range) {
-        if (s.type === 'workbench') stations.add('workbench');
-        if (s.type === 'sawmill') stations.add('sawmill');
-        if (s.type === 'furnace') stations.add('furnace');
-        if (s.type === 'anvil') stations.add('anvil');
-        if (s.type === 'campfire' && s.lit) stations.add('campfire');
+        const sType = s.type as string;
+        if (sType === 'workbench' || sType === 'workbench_item') stations.add('workbench');
+        if (sType === 'weapon_workbench' || sType === 'weapon_workbench_item') stations.add('weapon_workbench');
+        if (sType === 'sawmill' || sType === 'sawmill_item') stations.add('sawmill');
+        if (sType === 'furnace' || sType === 'furnace_item') stations.add('furnace');
+        if (sType === 'anvil' || sType === 'anvil_item') stations.add('anvil');
+        if ((sType === 'campfire' || sType === 'campfire_item') && s.lit) stations.add('campfire');
       }
     }
     return Array.from(stations);
@@ -934,6 +1120,13 @@ export class GameEngine {
 
   public tryPlaceStructure() {
     if (!this.selectedBuildingStructureId) return;
+
+    // Normalize structure type string (e.g. workbench_item -> workbench, campfire_item -> campfire)
+    let rawType = this.selectedBuildingStructureId;
+    if (rawType.endsWith('_item')) {
+      rawType = rawType.replace('_item', '');
+    }
+    const finalStructureType = rawType as StructureEntity['type'];
 
     // 1. Clamp placement position to be close to the player (max 96px reach)
     const MAX_BUILD_REACH = 96;
@@ -965,10 +1158,10 @@ export class GameEngine {
     // Validate bounds
     if (tileX < 2 || tileX >= this.world.width - 2 || tileY < 2 || tileY >= this.world.height - 2) return;
 
-    const isWatercraft = this.selectedBuildingStructureId === 'raft' || 
-                         this.selectedBuildingStructureId === 'canoe' || 
-                         this.selectedBuildingStructureId === 'wood_boat' || 
-                         this.selectedBuildingStructureId === 'pier';
+    const isWatercraft = finalStructureType === 'raft' || 
+                         finalStructureType === 'canoe' || 
+                         finalStructureType === 'wood_boat' || 
+                         finalStructureType === 'pier';
 
     // Check if tile is water
     const tileType = this.world.tiles[tileY * this.world.width + tileX];
@@ -990,50 +1183,90 @@ export class GameEngine {
       return;
     }
 
-    // Consume 1 matching item from hotbar or inventory
+    // Check and consume 1 matching item from hotbar or inventory
+    let itemFound = false;
+    let shouldExitBuildingMode = false;
     const hotbarSlot = this.player.inventory[this.player.selectedHotbarIndex];
-    if (hotbarSlot && (hotbarSlot.item.placeableStructureId === this.selectedBuildingStructureId || hotbarSlot.item.id.includes(this.selectedBuildingStructureId))) {
+
+    if (hotbarSlot && (
+      hotbarSlot.item.placeableStructureId === this.selectedBuildingStructureId || 
+      hotbarSlot.item.placeableStructureId === finalStructureType ||
+      hotbarSlot.item.id === this.selectedBuildingStructureId ||
+      hotbarSlot.item.id.includes(rawType)
+    )) {
+      itemFound = true;
       hotbarSlot.quantity--;
       if (hotbarSlot.quantity <= 0) {
         this.player.inventory[this.player.selectedHotbarIndex] = null;
-        this.cancelBuildingMode();
+        shouldExitBuildingMode = true;
       }
     } else {
       for (let i = 0; i < this.player.inventory.length; i++) {
         const slot = this.player.inventory[i];
-        if (slot && (slot.item.placeableStructureId === this.selectedBuildingStructureId || slot.item.id.includes(this.selectedBuildingStructureId))) {
+        if (slot && (
+          slot.item.placeableStructureId === this.selectedBuildingStructureId || 
+          slot.item.placeableStructureId === finalStructureType ||
+          slot.item.id === this.selectedBuildingStructureId ||
+          slot.item.id.includes(rawType)
+        )) {
+          itemFound = true;
           slot.quantity--;
           if (slot.quantity <= 0) {
             this.player.inventory[i] = null;
-            this.cancelBuildingMode();
+            shouldExitBuildingMode = true;
           }
           break;
         }
       }
     }
 
+    if (!itemFound) {
+      this.addFloatingText(targetX, targetY, 'Item não está no inventário!', '#ff5555');
+      this.cancelBuildingMode();
+      return;
+    }
+
+    // Remove any ground forage / loose item on that tile so it doesn't obstruct or clip
+    this.world.resources = this.world.resources.filter(r => {
+      const rx = Math.floor(r.x / TILE_SIZE);
+      const ry = Math.floor(r.y / TILE_SIZE);
+      return rx !== tileX || ry !== tileY;
+    });
+
+    const placedX = tileX * TILE_SIZE + TILE_SIZE / 2;
+    const placedY = tileY * TILE_SIZE + TILE_SIZE / 2;
+
     soundEngine.playBuild();
     this.world.structures.push({
-      id: `struct_${Date.now()}_${Math.random()}`,
-      type: this.selectedBuildingStructureId as StructureEntity['type'],
+      id: `struct_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      type: finalStructureType,
       tileX,
       tileY,
-      x: tileX * TILE_SIZE + TILE_SIZE / 2,
-      y: tileY * TILE_SIZE + TILE_SIZE / 2,
+      x: placedX,
+      y: placedY,
       width: TILE_SIZE,
       height: TILE_SIZE,
       hp: 150,
       maxHp: 150,
       lit: true,
-      chestInventory: this.selectedBuildingStructureId === 'chest' ? new Array(16).fill(null) : undefined,
+      chestInventory: finalStructureType === 'chest' ? new Array(16).fill(null) : undefined,
     });
 
-    if (this.selectedBuildingStructureId === 'bed') {
-      this.player.spawnPoint = { x: tileX * TILE_SIZE + TILE_SIZE / 2, y: tileY * TILE_SIZE + TILE_SIZE / 2 };
+    // Visual feedback
+    this.spawnBurst(placedX, placedY, '#4ade80', 10);
+    const structName = finalStructureType === 'workbench' ? 'Bancada' : finalStructureType === 'campfire' ? 'Fogueira' : 'Estrutura';
+    this.addFloatingText(placedX, placedY - 24, `${structName} Posicionada!`, '#4ade80');
+
+    if (finalStructureType === 'bed') {
+      this.player.spawnPoint = { x: placedX, y: placedY };
       this.addFloatingText(this.player.x, this.player.y - 25, 'Ponto de Renascimento Definido!', '#38bdf8');
     }
 
-    this.checkQuestProgress('build', this.selectedBuildingStructureId, 1);
+    this.checkQuestProgress('build', finalStructureType, 1);
+
+    if (shouldExitBuildingMode) {
+      this.cancelBuildingMode();
+    }
     this.onStateChange?.();
   }
 
@@ -1210,9 +1443,12 @@ export class GameEngine {
       }
     }
 
-    // Hit flash decay
+    // Hit flash & Invulnerability decay
     if (this.player.hitFlash > 0) {
       this.player.hitFlash -= dt;
+    }
+    if (this.invulnerabilityTimer > 0) {
+      this.invulnerabilityTimer -= dt;
     }
 
     // 2. Camera tracking
@@ -1274,6 +1510,24 @@ export class GameEngine {
     if (breathResult.drowningDamage > 0) {
       this.damagePlayer(breathResult.drowningDamage);
       this.addFloatingText(this.player.x, this.player.y - 25, 'Afogando!', '#38bdf8');
+    }
+
+    // Periodic survival warnings if health/stats are in danger so player is never taken by surprise
+    this.survivalWarningTimer += dt;
+    if (this.survivalWarningTimer >= 5.0) {
+      this.survivalWarningTimer = 0;
+      if (this.player.stats.thirst <= 0) {
+        this.addFloatingText(this.player.x, this.player.y - 30, '⚠️ SEDE CRÍTICA! Beba no rio ou poço!', '#38bdf8');
+        soundEngine.playPlayerHurt();
+      } else if (this.player.stats.hunger <= 0) {
+        this.addFloatingText(this.player.x, this.player.y - 30, '⚠️ FOME EXTREMA! Coma frutas ou carne!', '#f97316');
+        soundEngine.playPlayerHurt();
+      } else if (this.player.stats.bodyTemp < 22.0) {
+        this.addFloatingText(this.player.x, this.player.y - 30, '⚠️ CONGELANDO! Aproxime-se de fogueira!', '#67e8f9');
+        soundEngine.playPlayerHurt();
+      } else if (this.player.stats.bodyTemp > 42.5) {
+        this.addFloatingText(this.player.x, this.player.y - 30, '⚠️ CALOR ESCALDANTE! Busque sombra!', '#fb923c');
+      }
     }
 
     if (this.player.stats.hp <= 0) {
@@ -1347,24 +1601,62 @@ export class GameEngine {
     // Synchronize rain intensity audio
     soundEngine.setRainIntensity(this.world.rainIntensity);
 
+    // Synchronize ocean wave audio (throttled to 3Hz to eliminate frame drops)
+    this.oceanAudioTimer += dt;
+    if (this.oceanAudioTimer >= 0.35) {
+      this.oceanAudioTimer = 0;
+      if (this.player.isInsideCave) {
+        soundEngine.updateOceanWaves(9999);
+      } else {
+        const pTileX = Math.floor(this.player.x / TILE_SIZE);
+        const pTileY = Math.floor(this.player.y / TILE_SIZE);
+        let closestWaterDistSq = 99999999;
+        const searchRadius = 14;
+        for (let dy = -searchRadius; dy <= searchRadius; dy += 2) {
+          for (let dx = -searchRadius; dx <= searchRadius; dx += 2) {
+            const cx = pTileX + dx;
+            const cy = pTileY + dy;
+            if (cx >= 0 && cx < this.world.width && cy >= 0 && cy < this.world.height) {
+              const t = this.world.tiles[cy * this.world.width + cx];
+              if (t === TILE_TYPES.DEEP_WATER || t === TILE_TYPES.WATER) {
+                const dSq = (dx * TILE_SIZE) * (dx * TILE_SIZE) + (dy * TILE_SIZE) * (dy * TILE_SIZE);
+                if (dSq < closestWaterDistSq) {
+                  closestWaterDistSq = dSq;
+                }
+              }
+            }
+          }
+        }
+        soundEngine.updateOceanWaves(Math.sqrt(closestWaterDistSq));
+      }
+    }
+
     // 7. Update Enemies (AI & Daytime Undead Burning)
     const isDayTime = this.world.timeOfDay >= 6 * 60 && this.world.timeOfDay < 18 * 60;
+    const SIM_RADIUS = 750;
     for (const enemy of this.world.enemies) {
       if (enemy.hp <= 0) continue;
       if (enemy.hitFlash > 0) enemy.hitFlash -= dt;
+
+      // Skip heavy AI and shade checks for enemies far offscreen
+      if (Math.abs(enemy.x - this.player.x) > SIM_RADIUS || Math.abs(enemy.y - this.player.y) > SIM_RADIUS) {
+        continue;
+      }
 
       // Undead burning in direct sunlight unless under canopy shade
       if (isDayTime && (enemy.type === 'zombie' || enemy.type === 'skeleton')) {
         let inShade = false;
         for (const res of this.world.resources) {
+          if (res.hp <= 0) continue;
+          if (Math.abs(res.x - enemy.x) > 46 || Math.abs(res.y - enemy.y) > 46) continue;
           if (
-            res.hp > 0 &&
-            (res.type === 'tree' || 
-             res.type === 'oak_tree' || 
-             res.type === 'pine_tree' || 
-             res.type === 'birch_tree' || 
-             res.type === 'snowy_pine' || 
-             res.type === 'willow_tree')
+            res.type === 'tree' || 
+            res.type === 'oak_tree' || 
+            res.type === 'pine_tree' || 
+            res.type === 'birch_tree' || 
+            res.type === 'snowy_pine' || 
+            res.type === 'willow_tree' ||
+            res.type === 'acacia_tree'
           ) {
             if (Math.hypot(res.x - enemy.x, res.y - enemy.y) < 46) {
               inShade = true;
@@ -1445,6 +1737,9 @@ export class GameEngine {
     // 8. Update Animals
     for (const animal of this.world.animals) {
       if (animal.hitFlash > 0) animal.hitFlash -= dt;
+      if (Math.abs(animal.x - this.player.x) > SIM_RADIUS || Math.abs(animal.y - this.player.y) > SIM_RADIUS) {
+        continue;
+      }
       animal.stateTimer -= dt;
       if (animal.stateTimer <= 0) {
         animal.stateTimer = 3 + Math.random() * 4;
@@ -1531,17 +1826,20 @@ export class GameEngine {
   }
 
   private damagePlayer(amount: number) {
+    if (this.invulnerabilityTimer > 0) return;
+
     const defense = (this.player.equipment.armor?.item.defense ?? 0) + 
                     (this.player.equipment.helmet?.item.defense ?? 0) +
                     (this.player.equipment.boots?.item.defense ?? 0);
     const finalDmg = calculateDamage(amount, defense);
 
     this.player.stats.hp = Math.max(0, this.player.stats.hp - finalDmg);
-    this.player.hitFlash = 0.2;
+    this.player.hitFlash = 0.35;
+    this.invulnerabilityTimer = 0.65; // 0.65s invulnerability i-frames to prevent rapid burst deaths
     this.shakeDuration = 0.25;
     this.shakeMagnitude = 6;
     soundEngine.playPlayerHurt();
-    this.spawnBurst(this.player.x, this.player.y, '#ff1111', 12);
+    this.spawnBurst(this.player.x, this.player.y, '#ff1111', 10);
     this.addFloatingText(this.player.x, this.player.y - 25, `-${finalDmg}`, '#ff2222');
 
     if (this.player.stats.hp <= 0) {
@@ -1642,21 +1940,24 @@ export class GameEngine {
       if (s.type === 'farmland' || s.type === 'floor_torch') continue;
       // Watercraft & Piers do not block the player
       if (s.type === 'pier' || s.type === 'raft' || s.type === 'canoe' || s.type === 'wood_boat') continue;
+      if (Math.abs(s.x - x) > 30 || Math.abs(s.y - y) > 30) continue;
       if (Math.hypot(s.x - x, s.y - y) < 22) {
         return true;
       }
     }
 
-    // Physical collision for Trees and Rocks
+    // Physical collision for Trees and Rocks (optimized with AABB pre-filter)
     for (const res of this.world.resources) {
       if (res.hp <= 0) continue;
+      if (Math.abs(res.x - x) > 28 || Math.abs(res.y - y) > 28) continue;
       if (
         res.type === 'tree' || 
         res.type === 'oak_tree' || 
         res.type === 'pine_tree' || 
         res.type === 'birch_tree' || 
         res.type === 'snowy_pine' || 
-        res.type === 'willow_tree'
+        res.type === 'willow_tree' ||
+        res.type === 'acacia_tree'
       ) {
         // Collide with rooted trunk base
         if (Math.hypot(res.x - x, (res.y + 12) - y) < 14) {
@@ -1713,12 +2014,16 @@ export class GameEngine {
       }
     }
 
-    // 2. Collect All Renderable Entities & Sort by Y (Depth buffer)
+    // 2. Collect All Renderable Entities with Tighter Viewport Culling & Sort by Y
+    const halfViewW = (viewW / 2) / this.zoom + 64;
+    const halfViewH = (viewH / 2) / this.zoom + 64;
+    const animTime = this.gameTimeMs * 0.005;
+
     const renderList: { y: number; draw: () => void }[] = [];
 
-    // Structures
+    // Structures (Viewport culled)
     for (const s of this.world.structures) {
-      if (s.x >= this.cameraX - viewW && s.x <= this.cameraX + viewW && s.y >= this.cameraY - viewH && s.y <= this.cameraY + viewH) {
+      if (Math.abs(s.x - this.cameraX) <= halfViewW && Math.abs(s.y - this.cameraY) <= halfViewH) {
         renderList.push({
           y: s.y,
           draw: () => spriteRenderer.drawStructure(this.ctx, s, this.gameTimeMs),
@@ -1726,9 +2031,10 @@ export class GameEngine {
       }
     }
 
-    // Natural Resources
+    // Natural Resources (Viewport culled)
     for (const r of this.world.resources) {
-      if (r.x >= this.cameraX - viewW && r.x <= this.cameraX + viewW && r.y >= this.cameraY - viewH && r.y <= this.cameraY + viewH) {
+      if (r.hp <= 0) continue;
+      if (Math.abs(r.x - this.cameraX) <= halfViewW && Math.abs(r.y - this.cameraY) <= halfViewH) {
         renderList.push({
           y: r.y + 10,
           draw: () => spriteRenderer.drawResource(this.ctx, r, this.gameTimeMs),
@@ -1738,10 +2044,10 @@ export class GameEngine {
 
     // Animals (Viewport culled)
     for (const animal of this.world.animals) {
-      if (animal.x >= this.cameraX - viewW && animal.x <= this.cameraX + viewW && animal.y >= this.cameraY - viewH && animal.y <= this.cameraY + viewH) {
+      if (Math.abs(animal.x - this.cameraX) <= halfViewW && Math.abs(animal.y - this.cameraY) <= halfViewH) {
         renderList.push({
           y: animal.y,
-          draw: () => spriteRenderer.drawAnimal(this.ctx, animal, this.gameTimeMs * 0.005),
+          draw: () => spriteRenderer.drawAnimal(this.ctx, animal, animTime),
         });
       }
     }
@@ -1749,10 +2055,10 @@ export class GameEngine {
     // Enemies (Viewport culled)
     for (const enemy of this.world.enemies) {
       if (enemy.hp <= 0) continue;
-      if (enemy.x >= this.cameraX - viewW && enemy.x <= this.cameraX + viewW && enemy.y >= this.cameraY - viewH && enemy.y <= this.cameraY + viewH) {
+      if (Math.abs(enemy.x - this.cameraX) <= halfViewW && Math.abs(enemy.y - this.cameraY) <= halfViewH) {
         renderList.push({
           y: enemy.y,
-          draw: () => spriteRenderer.drawEnemy(this.ctx, enemy, this.gameTimeMs * 0.005),
+          draw: () => spriteRenderer.drawEnemy(this.ctx, enemy, animTime),
         });
       }
     }
@@ -1767,7 +2073,7 @@ export class GameEngine {
         this.player.y,
         this.player.facing,
         this.player.isMoving,
-        this.gameTimeMs * 0.005,
+        animTime,
         this.player.isAttacking,
         this.player.swingProgress,
         equippedWeaponId,
@@ -1780,8 +2086,52 @@ export class GameEngine {
 
     // Sort and execute draw
     renderList.sort((a, b) => a.y - b.y);
-    for (const item of renderList) {
-      item.draw();
+    for (let i = 0; i < renderList.length; i++) {
+      renderList[i].draw();
+    }
+
+    // 2.5. Draw Interactive Action Prompt Badges above nearby structures
+    for (const s of this.world.structures) {
+      if (Math.abs(s.x - this.cameraX) <= halfViewW && Math.abs(s.y - this.cameraY) <= halfViewH) {
+        const dist = Math.hypot(s.x - this.player.x, s.y - this.player.y);
+        if (dist <= 95) {
+          const sType = s.type as string;
+          let label = '';
+          if (sType === 'workbench' || sType === 'workbench_item') label = '🛠️ Bancada [Toque / E]';
+          else if (sType === 'weapon_workbench' || sType === 'weapon_workbench_item') label = '🔫 Bancada de Armas [Toque / E]';
+          else if (sType === 'campfire' || sType === 'campfire_item') label = '🔥 Cozinhar [Toque / E]';
+          else if (sType === 'chest') label = '📦 Baú [Toque / E]';
+          else if (sType === 'furnace') label = '♨️ Fornalha [Toque / E]';
+          else if (sType === 'sawmill') label = '🪚 Serraria [Toque / E]';
+          else if (sType === 'anvil') label = '⚓ Bigorna [Toque / E]';
+          else if (sType === 'bed') label = '🛏️ Dormir [Toque / E]';
+          else if (sType === 'wood_door') label = s.isOpen ? '🚪 Fechar' : '🚪 Abrir';
+          else if (sType === 'well') label = '⛲ Beber Água';
+          else if (sType === 'cave_entrance') label = '🕳️ Caverna [Toque / E]';
+          else if (sType === 'cave_exit') label = '🪜 Subir [Toque / E]';
+
+          if (label) {
+            const bob = Math.sin(this.gameTimeMs * 0.007) * 3;
+            const bubbleY = s.y - 32 + bob;
+            this.ctx.save();
+            this.ctx.font = 'bold 10px monospace';
+            const textWidth = this.ctx.measureText(label).width;
+            this.ctx.fillStyle = 'rgba(15, 17, 28, 0.88)';
+            this.ctx.strokeStyle = '#facc15';
+            this.ctx.lineWidth = 1.5;
+            this.ctx.beginPath();
+            this.ctx.roundRect(s.x - textWidth / 2 - 6, bubbleY - 12, textWidth + 12, 18, 6);
+            this.ctx.fill();
+            this.ctx.stroke();
+
+            this.ctx.fillStyle = '#fef08a';
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'middle';
+            this.ctx.fillText(label, s.x, bubbleY - 3);
+            this.ctx.restore();
+          }
+        }
+      }
     }
 
     // 3. Draw Loot Drops
@@ -1792,12 +2142,28 @@ export class GameEngine {
       }
     }
 
-    // 4. Draw Projectiles (Arrows)
+    // 4. Draw Projectiles (Arrows & Bullets)
     for (const p of this.world.projectiles) {
-      this.ctx.fillStyle = '#f0c050';
-      this.ctx.beginPath();
-      this.ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
-      this.ctx.fill();
+      if (p.projectileType === 'bullet_pistol' || p.projectileType === 'bullet_rifle') {
+        const angle = Math.atan2(p.vy, p.vx);
+        const len = p.projectileType === 'bullet_rifle' ? 18 : 12;
+        this.ctx.strokeStyle = '#fef08a';
+        this.ctx.lineWidth = p.projectileType === 'bullet_rifle' ? 3 : 2;
+        this.ctx.beginPath();
+        this.ctx.moveTo(p.x, p.y);
+        this.ctx.lineTo(p.x - Math.cos(angle) * len, p.y - Math.sin(angle) * len);
+        this.ctx.stroke();
+
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.beginPath();
+        this.ctx.arc(p.x, p.y, p.projectileType === 'bullet_rifle' ? 2.5 : 2, 0, Math.PI * 2);
+        this.ctx.fill();
+      } else {
+        this.ctx.fillStyle = '#f0c050';
+        this.ctx.beginPath();
+        this.ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+        this.ctx.fill();
+      }
     }
 
     // 5. Ghost Building Placement Preview (Clamped to player vicinity)
@@ -2012,15 +2378,23 @@ export class GameEngine {
     const isMorningFog = this.world.timeOfDay >= 5 * 60 && this.world.timeOfDay <= 8.5 * 60;
 
     if (!this.player.isInsideCave && (isSwampOrLake || isRuins || isMorningFog)) {
-      const fogAlpha = isSwampOrLake ? 0.28 : isMorningFog ? 0.18 : 0.22;
+      const fogAlpha = isSwampOrLake ? 0.16 : isMorningFog ? 0.10 : 0.14;
       this.ctx.save();
-      for (let w = 0; w < 3; w++) {
-        const drift = (this.gameTimeMs * 0.015 * (w % 2 === 0 ? 1 : -0.7) + w * 260) % (viewW + 200) - 100;
-        const fy = (viewH * 0.3 * w) + Math.sin(this.gameTimeMs * 0.001 + w) * 20;
-        const grad = this.ctx.createRadialGradient(drift, fy, 40, drift, fy, 220);
-        grad.addColorStop(0, `rgba(226, 232, 240, ${fogAlpha})`);
-        grad.addColorStop(1, 'rgba(226, 232, 240, 0)');
-        this.ctx.fillStyle = grad;
+      this.ctx.fillStyle = `rgba(215, 228, 238, ${fogAlpha})`;
+      this.ctx.fillRect(0, 0, viewW, viewH);
+      this.ctx.restore();
+    }
+
+    // 7. Danger & Low Health Warning Vignette
+    const isCriticalHp = this.player.stats.hp < this.player.stats.maxHp * 0.35;
+    if (isCriticalHp || this.invulnerabilityTimer > 0) {
+      const pulse = 0.2 + Math.sin(this.gameTimeMs * 0.008) * 0.12;
+      this.ctx.save();
+      this.ctx.lineWidth = 14;
+      this.ctx.strokeStyle = `rgba(239, 68, 68, ${pulse + 0.25})`;
+      this.ctx.strokeRect(0, 0, viewW, viewH);
+      if (isCriticalHp) {
+        this.ctx.fillStyle = `rgba(220, 38, 38, ${pulse * 0.35})`;
         this.ctx.fillRect(0, 0, viewW, viewH);
       }
       this.ctx.restore();
